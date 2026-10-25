@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Conversá por voz con tu asistente de recordatorios de medicación.">
+    <title>Asistente de voz | Asistente de medicación</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/config.js" defer></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/chat.js" defer></script>
+</head>
+<body>
+    <header class="encabezado">
+        <a href="index.html" class="marca">
+            <span class="marca__icono" aria-hidden="true">♥</span>
+            <span>Mi asistente de medicación</span>
+        </a>
+        <nav class="navegacion" aria-label="Navegación principal">
+            <a href="index.html" class="navegacion__enlace">Mis medicamentos</a>
+            <a href="chat.html" class="navegacion__enlace navegacion__enlace--activo" aria-current="page">Asistente de voz</a>
+        </nav>
+    </header>
+
+    <main class="contenedor chat">
+        <section class="chat__encabezado">
+            <div class="chat__identidad">
+                <div class="chat__avatar" aria-hidden="true">♥</div>
+                <div>
+                    <h1>Asistente de medicación</h1>
+                    <p id="estado-conexion" role="status" aria-live="polite">
+                        Preparando el asistente...
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="chat__conversacion" aria-label="Conversación con el asistente">
+            <div
+                id="lista-mensajes"
+                class="chat__mensajes"
+                aria-live="polite"
+                aria-relevant="additions text"
+            ></div>
+
+            <div id="indicador-actividad" class="chat__actividad" role="status" aria-live="polite" hidden>
+                <span class="chat__punto"></span>
+                <span id="texto-actividad">Procesando...</span>
+            </div>
+
+            <div id="mensaje-chat-error" class="mensaje" role="alert" hidden></div>
+        </section>
+
+        <section class="chat__acciones" aria-label="Controles del asistente">
+            <div class="chat__estado-microfono">
+                <span id="indicador-microfono" class="microfono__indicador" aria-hidden="true"></span>
+                <span id="estado-microfono">Micrófono desactivado</span>
+            </div>
+
+            <div class="chat__botones">
+                <button
+                    type="button"
+                    id="boton-escucha"
+                    class="boton boton--microfono"
+                    aria-pressed="false"
+                    aria-label="Activar micrófono"
+                >
+                    <span id="icono-microfono" aria-hidden="true">🎙</span>
+                    <span id="texto-boton-escucha">Activar escucha</span>
+                </button>
+
+                <button
+                    type="button"
+                    id="boton-confirmar-toma"
+                    class="boton boton--confirmar"
+                    disabled
+                >
+                    ✓ Confirmar que tomé la medicación
+                </button>
+            </div>
+
+            <p class="chat__ayuda">
+                Podés pausar el micrófono mientras el asistente continúa hablando.
+            </p>
+        </section>
+
+        <section class="chat__entrada" aria-label="Escribir un mensaje">
+            <form id="form-mensaje">
+                <label for="texto-mensaje" class="visualmente-oculto">
+                    Escribí tu mensaje
+                </label>
+                <textarea
+                    id="texto-mensaje"
+                    name="mensaje"
+                    rows="1"
+                    maxlength="1000"
+                    placeholder="Escribí un mensaje..."
+                    autocomplete="off"
+                ></textarea>
+                <button type="submit" id="boton-enviar-mensaje" aria-label="Enviar mensaje">
+                    Enviar
+                </button>
+            </form>
+            <p class="chat__nota">
+                Las confirmaciones se registrarán cuando estén conectadas al backend.
+            </p>
+        </section>
+    </main>
+
+    <footer class="pie">
+        <p>Asistente de medicación · Ante dudas sobre tu tratamiento, consultá a tu profesional de salud.</p>
+    </footer>
+</body>
+</html>

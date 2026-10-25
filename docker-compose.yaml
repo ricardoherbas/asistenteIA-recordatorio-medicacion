@@ -1,0 +1,117 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: asistente_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+  frontend:
+    image: nginx:alpine
+    container_name: asistente_frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    expose:
+      - "80"
+
+  db:
+    image: postgres:16-alpine
+    container_name: asistente_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    expose:
+      - "5432"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_server
+    restart: unless-stopped
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  stt-whisper:
+    image: rhasspy/wyoming-whisper
+    container_name: stt-whisper
+    restart: unless-stopped
+    expose:
+      - "10300"
+    command:
+      - "--model"
+      - "tiny-int8"
+      - "--language"
+      - "es"
+      - "--uri"
+      - "tcp://0.0.0.0:10300"
+      - "--download-dir"
+      - "/data"
+    volumes:
+      - ./models/whisper-data:/data
+
+  tts-piper:
+    image: rhasspy/wyoming-piper
+    container_name: tts-piper
+    restart: unless-stopped
+    expose:
+      - "10200"
+    command:
+      - "--voice"
+      - "es_ES-sharvard-medium"
+      - "--speaker"
+      - "F"
+      - "--uri"
+      - "tcp://0.0.0.0:10200"
+      - "--data-dir"
+      - "/data"
+      - "--download-dir"
+      - "/data"
+    volumes:
+      - ./voices:/data
+
+  prolog:
+    build:
+      context: ./prolog
+    container_name: prolog
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "8080"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "4000"
+    depends_on:
+      - db
+      - ollama
+      - stt-whisper
+      - tts-piper
+      - prolog
+
+volumes:
+  postgres_data:
+  ollama_data:
+  caddy_data:
+  caddy_config:

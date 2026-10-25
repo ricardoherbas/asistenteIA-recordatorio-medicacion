@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Administrá tus datos personales, medicamentos y horarios de toma.">
+    <title>Mi asistente de medicación</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/config.js" defer></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/index.js" defer></script>
+</head>
+<body>
+    <header class="encabezado">
+        <a href="index.html" class="marca">
+            <span class="marca__icono" aria-hidden="true">♥</span>
+            <span>Mi asistente de medicación</span>
+        </a>
+        <nav class="navegacion" aria-label="Navegación principal">
+            <a href="index.html" class="navegacion__enlace navegacion__enlace--activo" aria-current="page">Mi perfil y medicación</a>
+            <a href="chat.html" class="navegacion__enlace">Asistente de voz</a>
+        </nav>
+    </header>
+
+    <main class="contenedor">
+        <section class="presentacion">
+            <p class="presentacion__etiqueta">TU SALUD, ORGANIZADA</p>
+            <h1>Mi asistente de medicación</h1>
+            <p>Completá tus datos personales y organizá los medicamentos y horarios de tu tratamiento.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="titulo-perfil">
+            <div class="panel__encabezado">
+                <div>
+                    <h2 id="titulo-perfil">Datos de la persona</h2>
+                    <p>Información de quien recibirá los recordatorios.</p>
+                </div>
+            </div>
+
+            <form id="form-persona">
+                <div class="campo">
+                    <label for="persona-nombre">Nombre</label>
+                    <input
+                        type="text"
+                        id="persona-nombre"
+                        name="nombre"
+                        maxlength="100"
+                        autocomplete="given-name"
+                        placeholder="Tu nombre"
+                        required
+                    >
+                </div>
+
+                <div class="campo">
+                    <label for="persona-apellido">Apellido</label>
+                    <input
+                        type="text"
+                        id="persona-apellido"
+                        name="apellido"
+                        maxlength="100"
+                        autocomplete="family-name"
+                        placeholder="Tu apellido"
+                        required
+                    >
+                </div>
+
+                <div class="campo">
+                    <label for="persona-email">Email</label>
+                    <input
+                        type="email"
+                        id="persona-email"
+                        name="email"
+                        maxlength="150"
+                        autocomplete="email"
+                        placeholder="tu@email.com"
+                        required
+                    >
+                </div>
+
+                <p id="mensaje-persona" class="mensaje" role="status" aria-live="polite" hidden></p>
+
+                <button type="submit" id="guardar-persona" class="boton boton--principal">
+                    Guardar datos personales
+                </button>
+            </form>
+
+            <p id="resumen-persona" aria-live="polite"></p>
+        </section>
+
+        <section class="panel" aria-labelledby="titulo-formulario">
+            <div class="panel__encabezado">
+                <div>
+                    <h2 id="titulo-formulario">Agregar medicamento</h2>
+                    <p>Indicá la dosis, el inicio del tratamiento y la frecuencia indicada.</p>
+                </div>
+            </div>
+
+            <form id="form-medicamento">
+                <div class="campo">
+                    <label for="nombre">Nombre del medicamento</label>
+                    <input
+                        type="text"
+                        id="nombre"
+                        name="nombre"
+                        placeholder="Ej.: Medicamento indicado"
+                        maxlength="150"
+                        autocomplete="off"
+                        required
+                    >
+                </div>
+
+                <div class="campo">
+                    <label for="dosis">Dosis indicada</label>
+                    <input
+                        type="text"
+                        id="dosis"
+                        name="dosis"
+                        placeholder="Ej.: 1 comprimido de 500 mg"
+                        maxlength="100"
+                        required
+                    >
+                </div>
+
+                <fieldset class="grupo-horarios">
+                    <legend>Programación de las tomas</legend>
+                    <p>Ingresá la fecha y hora de la primera toma y cada cuántas horas debe repetirse.</p>
+
+                    <div class="campo">
+                        <label for="fecha-hora-inicio">Fecha y hora de inicio</label>
+                        <input
+                            type="datetime-local"
+                            id="fecha-hora-inicio"
+                            name="fechaHoraInicio"
+                            required
+                        >
+                    </div>
+
+                    <div class="campo">
+                        <label for="intervalo-horas">¿Cada cuántas horas debe tomarlo?</label>
+                        <input
+                            type="number"
+                            id="intervalo-horas"
+                            name="intervaloHoras"
+                            min="1"
+                            max="168"
+                            step="1"
+                            placeholder="Ej.: 8"
+                            required
+                        >
+                        <small>Ingresá un número entero de horas, entre 1 y 168.</small>
+                    </div>
+
+                    <div class="campo">
+                        <label for="fecha-hora-fin">Fecha y hora de finalización (opcional)</label>
+                        <input
+                            type="datetime-local"
+                            id="fecha-hora-fin"
+                            name="fechaHoraFin"
+                        >
+                        <small>Dejala vacía si no tenés una fecha de finalización indicada.</small>
+                    </div>
+
+                    <p id="resumen-horarios" aria-live="polite"></p>
+                </fieldset>
+
+                <div class="campo">
+                    <label for="observaciones">Instrucciones u observaciones (opcional)</label>
+                    <textarea
+                        id="observaciones"
+                        name="observaciones"
+                        rows="3"
+                        maxlength="500"
+                        placeholder="Indicaciones adicionales de tu profesional de salud"
+                    ></textarea>
+                </div>
+
+                <p id="mensaje-formulario" class="mensaje" role="status" aria-live="polite" hidden></p>
+
+                <button type="submit" id="guardar-medicamento" class="boton boton--principal">
+                    Guardar medicamento
+                </button>
+            </form>
+        </section>
+
+        <section class="seccion-medicamentos" aria-labelledby="titulo-lista">
+            <div class="seccion-medicamentos__encabezado">
+                <div>
+                    <h2 id="titulo-lista">Mis medicamentos registrados</h2>
+                    <p>Acá aparecerán los medicamentos que agregues.</p>
+                </div>
+                <span id="cantidad-medicamentos" class="contador">0 medicamentos</span>
+            </div>
+
+            <div id="lista-medicamentos" class="lista-medicamentos" aria-live="polite">
+                <div id="estado-vacio" class="estado-vacio">
+                    <span class="estado-vacio__icono" aria-hidden="true">＋</span>
+                    <h3>Todavía no agregaste medicamentos</h3>
+                    <p>Cuando registres uno, aparecerá en esta sección.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="acceso-asistente">
+            <div>
+                <h2>¿Querés hablar con tu asistente?</h2>
+                <p>Podés conversar por voz y responder a tus recordatorios.</p>
+            </div>
+            <a href="chat.html" class="boton boton--principal">Ir al asistente de voz</a>
+        </section>
+    </main>
+
+    <footer class="pie">
+        <p>Asistente de medicación · Recordatorios para acompañar tu tratamiento.</p>
+    </footer>
+</body>
+</html>

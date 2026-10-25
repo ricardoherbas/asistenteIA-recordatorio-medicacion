@@ -1,0 +1,24 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend del asistente inteligente para adultos mayores",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.20.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-validator": "^7.3.2",
+    "firebase-admin": "^14.5.0",
+    "nodemailer": "^10.2.1",
+    "pg": "^8.23.1",
+    "ws": "^8.22.0"
+  }
+}
