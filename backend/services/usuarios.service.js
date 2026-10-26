@@ -17,7 +17,6 @@ const crearUsuario = async ({ nombre, apellido, email }) => {
     `;
 
     const valores = [nombre, apellido, email];
-
     const resultado = await pool.query(consulta, valores);
 
     return resultado.rows[0];
@@ -57,8 +56,31 @@ const obtenerUsuarioPorEmail = async (email) => {
     return resultado.rows[0] || null;
 };
 
+const actualizarUsuario = async (id, { nombre, apellido, email }) => {
+    const consulta = `
+        UPDATE usuarios
+        SET
+            nombre = $1,
+            apellido = $2,
+            email = $3
+        WHERE id = $4
+        RETURNING
+            id,
+            nombre,
+            apellido,
+            email,
+            creado_en;
+    `;
+
+    const valores = [nombre, apellido, email, id];
+    const resultado = await pool.query(consulta, valores);
+
+    return resultado.rows[0] || null;
+};
+
 module.exports = {
     crearUsuario,
     obtenerUsuarioPorId,
-    obtenerUsuarioPorEmail
+    obtenerUsuarioPorEmail,
+    actualizarUsuario
 };

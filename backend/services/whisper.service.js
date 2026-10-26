@@ -2,7 +2,8 @@ const net = require('net');
 
 const WHISPER_HOST = process.env.WHISPER_HOST;
 const WHISPER_PORT = Number(process.env.WHISPER_PORT);
-const WHISPER_TIMEOUT_MS = Number(process.env.WHISPER_TIMEOUT_MS);
+const WHISPER_TIMEOUT_MS =
+    Number(process.env.WHISPER_TIMEOUT_MS) || 30000;
 
 const transcribirConWhisper = (pcmBuffer, signal) => {
     return new Promise((resolve, reject) => {
@@ -25,14 +26,30 @@ const transcribirConWhisper = (pcmBuffer, signal) => {
             return;
         }
 
-        let respuesta = '';
-        let finalizado = false;
-        let temporizador;
+        if (
+            !WHISPER_HOST ||
+            !Number.isInteger(WHISPER_PORT) ||
+            WHISPER_PORT <= 0
+        ) {
+            reject(
+                new Error(
+                    'La configuración de conexión con Whisper no es válida.'
+                )
+            );
+            return;
+        }
 
         const cliente = net.createConnection({
             host: WHISPER_HOST,
             port: WHISPER_PORT
         });
+
+        let bufferEntrada = Buffer.alloc(0);
+        let etapa = 'cabecera';
+        let mensajePendiente = null;
+        let datosPendientes = null;
+        let finalizado = false;
+        let temporizador;
 
         const finalizar = (error, texto) => {
             if (finalizado) return;
@@ -54,6 +71,204 @@ const transcribirConWhisper = (pcmBuffer, signal) => {
             finalizar(new Error('PIPELINE_CANCELADO'));
         };
 
+        const extraerLinea = () => {
+            const indice = bufferEntrada.indexOf(0x0A);
+
+            if (indice === -1) return null;
+
+            const linea = bufferEntrada
+                .subarray(0, indice)
+                .toString('utf8')
+                .replace(/\r$/, '');
+
+            bufferEntrada = bufferEntrada.subarray(indice + 1);
+
+            return linea;
+        };
+
+        const validarLongitud = (valor, nombre) => {
+            const longitud = Number(valor ?? 0);
+
+            if (
+                !Number.isSafeInteger(longitud) ||
+                longitud < 0
+            ) {
+                throw new Error(
+                    `Whisper devolvió una longitud ${nombre} inválida.`
+                );
+            }
+
+            return longitud;
+        };
+
+        const procesarEvento = (mensaje) => {
+            const datos = mensaje.data || datosPendientes || {};
+
+            if (mensaje.type === 'error') {
+                const detalle =
+                    datos.text ||
+                    'Whisper informó un error de transcripción.';
+
+                finalizar(new Error(detalle));
+                return;
+            }
+
+            if (
+                mensaje.type === 'transcript' ||
+                mensaje.type === 'transcription'
+            ) {
+                const texto = datos.text;
+
+                if (typeof texto === 'string' && texto.trim()) {
+                    finalizar(null, texto.trim());
+                    return;
+                }
+
+                finalizar(
+                    new Error(
+                        'Whisper devolvió un evento de transcripción sin texto.'
+                    )
+                );
+                return;
+            }
+
+            mensajePendiente = null;
+            datosPendientes = null;
+            etapa = 'cabecera';
+        };
+
+        const procesarMensajes = () => {
+            while (!finalizado) {
+                try {
+                    if (etapa === 'cabecera') {
+                        const linea = extraerLinea();
+
+                        if (linea === null) return;
+                        if (!linea.trim()) continue;
+
+                        try {
+                            mensajePendiente = JSON.parse(linea);
+                        } catch {
+                            throw new Error(
+                                `Whisper devolvió un encabezado Wyoming inválido: ${linea.slice(0, 200)}`
+                            );
+                        }
+
+                        mensajePendiente.data_length = validarLongitud(
+                            mensajePendiente.data_length,
+                            'data_length'
+                        );
+
+                        mensajePendiente.payload_length = validarLongitud(
+                            mensajePendiente.payload_length,
+                            'payload_length'
+                        );
+
+                        datosPendientes = mensajePendiente.data || {};
+
+                        if (mensajePendiente.data_length > 0) {
+                            etapa = 'datos';
+                        } else if (mensajePendiente.payload_length > 0) {
+                            etapa = 'payload';
+                        } else {
+                            procesarEvento(mensajePendiente);
+                        }
+
+                        continue;
+                    }
+
+                    if (etapa === 'datos') {
+                        const longitud = mensajePendiente.data_length;
+
+                        if (bufferEntrada.length < longitud) return;
+
+                        const bytesDatos = bufferEntrada.subarray(
+                            0,
+                            longitud
+                        );
+
+                        bufferEntrada = bufferEntrada.subarray(longitud);
+
+                        try {
+                            datosPendientes = JSON.parse(
+                                bytesDatos.toString('utf8')
+                            );
+                        } catch {
+                            throw new Error(
+                                'Whisper devolvió datos JSON inválidos.'
+                            );
+                        }
+
+                        mensajePendiente.data = {
+                            ...(mensajePendiente.data || {}),
+                            ...datosPendientes
+                        };
+
+                        datosPendientes = mensajePendiente.data;
+
+                        if (mensajePendiente.payload_length > 0) {
+                            etapa = 'payload';
+                        } else {
+                            procesarEvento(mensajePendiente);
+                        }
+
+                        continue;
+                    }
+
+                    if (etapa === 'payload') {
+                        const longitud = mensajePendiente.payload_length;
+
+                        if (bufferEntrada.length < longitud) return;
+
+                        const payload = bufferEntrada.subarray(
+                            0,
+                            longitud
+                        );
+
+                        bufferEntrada = bufferEntrada.subarray(longitud);
+
+                        void payload;
+
+                        procesarEvento(mensajePendiente);
+                        continue;
+                    }
+
+                    return;
+                } catch (error) {
+                    finalizar(error);
+                    return;
+                }
+            }
+        };
+
+        const enviarMensaje = (tipo, data = {}, payload = null) => {
+            const datosJSON = Buffer.from(
+                JSON.stringify(data),
+                'utf8'
+            );
+
+            const longitudDatos =
+                Object.keys(data).length > 0 ? datosJSON.length : 0;
+
+            const longitudPayload = payload?.length || 0;
+
+            const cabecera = {
+                type: tipo,
+                data_length: longitudDatos,
+                payload_length: longitudPayload
+            };
+
+            cliente.write(`${JSON.stringify(cabecera)}\n`);
+
+            if (longitudDatos > 0) {
+                cliente.write(datosJSON);
+            }
+
+            if (longitudPayload > 0) {
+                cliente.write(payload);
+            }
+        };
+
         signal?.addEventListener('abort', cancelar, { once: true });
 
         temporizador = setTimeout(() => {
@@ -65,121 +280,49 @@ const transcribirConWhisper = (pcmBuffer, signal) => {
         cliente.on('connect', () => {
             cliente.setNoDelay(true);
 
-            const enviarMensaje = (mensaje) => {
-                cliente.write(`${JSON.stringify(mensaje)}\n`);
-            };
-
-            enviarMensaje({
-                type: 'transcribe',
-                data: { language: 'es' }
+            enviarMensaje('transcribe', {
+                language: 'es'
             });
 
-            enviarMensaje({
-                type: 'audio-start',
-                data: {
-                    rate: 16000,
-                    width: 2,
-                    channels: 1
-                }
+            enviarMensaje('audio-start', {
+                rate: 16000,
+                width: 2,
+                channels: 1
             });
 
-            enviarMensaje({
-                type: 'audio-chunk',
-                data: {
+            enviarMensaje(
+                'audio-chunk',
+                {
                     rate: 16000,
                     width: 2,
                     channels: 1,
                     timestamp: 0
                 },
-                payload_length: pcmBuffer.length
-            });
+                pcmBuffer
+            );
 
-            cliente.write(pcmBuffer);
-
-            enviarMensaje({
-                type: 'audio-stop'
-            });
+            enviarMensaje('audio-stop');
         });
 
         cliente.on('data', (datos) => {
-            respuesta += datos.toString('utf8');
-
-            const lineas = respuesta.split('\n');
-            respuesta = lineas.pop() || '';
-
-            for (const linea of lineas) {
-                if (!linea.trim()) continue;
-
-                let mensaje;
-
-                try {
-                    mensaje = JSON.parse(linea);
-                } catch {
-                    finalizar(
-                        new Error(
-                            'Whisper devolvió un mensaje Wyoming inválido.'
-                        )
-                    );
-                    return;
-                }
-
-                if (mensaje.type === 'error') {
-                    finalizar(
-                        new Error(
-                            mensaje.data?.text || 'Whisper informó un error.'
-                        )
-                    );
-                    return;
-                }
-
-                if (
-                    mensaje.type === 'transcript' ||
-                    mensaje.type === 'transcription'
-                ) {
-                    const texto = mensaje.data?.text?.trim();
-
-                    if (texto) {
-                        finalizar(null, texto);
-                        return;
-                    }
-                }
-            }
+            bufferEntrada = Buffer.concat([bufferEntrada, datos]);
+            procesarMensajes();
         });
 
         cliente.on('error', (error) => {
             finalizar(
-                new Error(
-                    `Error de conexión con Whisper: ${error.message}`
-                )
+                new Error(`Error de conexión con Whisper: ${error.message}`)
             );
         });
 
         cliente.on('end', () => {
-            if (respuesta.trim()) {
-                try {
-                    const mensaje = JSON.parse(respuesta);
-
-                    if (
-                        mensaje.type === 'transcript' ||
-                        mensaje.type === 'transcription'
-                    ) {
-                        const texto = mensaje.data?.text?.trim();
-
-                        if (texto) {
-                            finalizar(null, texto);
-                            return;
-                        }
-                    }
-                } catch {
-                    // La respuesta final no contiene un mensaje JSON completo.
-                }
+            if (!finalizado) {
+                finalizar(
+                    new Error(
+                        'Whisper cerró la conexión sin una transcripción válida.'
+                    )
+                );
             }
-
-            finalizar(
-                new Error(
-                    'Whisper cerró la conexión sin una transcripción válida.'
-                )
-            );
         });
 
         cliente.on('close', () => {

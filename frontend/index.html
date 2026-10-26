@@ -26,15 +26,23 @@
         <section class="presentacion">
             <p class="presentacion__etiqueta">TU SALUD, ORGANIZADA</p>
             <h1>Mi asistente de medicación</h1>
-            <p>Completá tus datos personales y organizá los medicamentos y horarios de tu tratamiento.</p>
+            <p>Guardá tus datos personales una sola vez y organizá los medicamentos y horarios de tu tratamiento.</p>
         </section>
 
-        <section class="panel" aria-labelledby="titulo-perfil">
+        <section class="panel" id="seccion-perfil" aria-labelledby="titulo-perfil">
             <div class="panel__encabezado">
                 <div>
                     <h2 id="titulo-perfil">Datos de la persona</h2>
                     <p>Información de quien recibirá los recordatorios.</p>
                 </div>
+                <button
+                    type="button"
+                    id="editar-persona"
+                    class="boton"
+                    hidden
+                >
+                    Editar datos
+                </button>
             </div>
 
             <form id="form-persona">
@@ -84,10 +92,15 @@
                 </button>
             </form>
 
-            <p id="resumen-persona" aria-live="polite"></p>
+            <div id="resumen-persona" aria-live="polite" hidden></div>
         </section>
 
-        <section class="panel" aria-labelledby="titulo-formulario">
+        <section
+            class="panel"
+            id="seccion-formulario-medicamento"
+            aria-labelledby="titulo-formulario"
+            hidden
+        >
             <div class="panel__encabezado">
                 <div>
                     <h2 id="titulo-formulario">Agregar medicamento</h2>
@@ -182,7 +195,12 @@
             </form>
         </section>
 
-        <section class="seccion-medicamentos" aria-labelledby="titulo-lista">
+        <section
+            class="seccion-medicamentos"
+            id="seccion-lista-medicamentos"
+            aria-labelledby="titulo-lista"
+            hidden
+        >
             <div class="seccion-medicamentos__encabezado">
                 <div>
                     <h2 id="titulo-lista">Mis medicamentos registrados</h2>

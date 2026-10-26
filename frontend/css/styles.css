@@ -1152,3 +1152,132 @@ svg {
         transition-duration: 0.01ms !important;
     }
 }
+
+
+/* =========================================
+   Perfil personal y edición
+========================================= */
+
+#seccion-perfil .panel__encabezado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+
+#seccion-perfil .panel__encabezado h2 {
+    margin: 0 0 6px;
+    font-size: 1.2rem;
+    font-weight: 750;
+}
+
+#seccion-perfil .panel__encabezado p {
+    margin: 0;
+    color: var(--color-texto-secundario);
+    font-size: 0.92rem;
+}
+
+#editar-persona {
+    flex-shrink: 0;
+}
+
+#resumen-persona {
+    overflow-wrap: anywhere;
+}
+
+#resumen-persona .resumen-persona {
+    padding: 16px;
+    background: var(--color-primario-claro);
+    border: 1px solid #c5e0fb;
+    border-radius: var(--radio-medio);
+}
+
+#resumen-persona .resumen-persona p {
+    margin: 0 0 8px;
+}
+
+#resumen-persona .resumen-persona p:last-child {
+    margin-bottom: 0;
+}
+
+/* Compatibilidad entre los nombres del HTML y el CSS */
+
+.boton--principal {
+    color: #ffffff;
+    background: var(--color-primario);
+    border-color: var(--color-primario);
+    box-shadow: 0 6px 15px rgba(24, 119, 201, 0.17);
+}
+
+.boton--principal:hover:not(:disabled) {
+    color: #ffffff;
+    background: var(--color-primario-oscuro);
+    border-color: var(--color-primario-oscuro);
+}
+
+.panel {
+    min-width: 0;
+    margin-bottom: 28px;
+    padding: 26px;
+    background: var(--color-superficie);
+    border: 1px solid var(--color-borde);
+    border-radius: var(--radio-grande);
+    box-shadow: var(--sombra-tarjeta);
+}
+
+.panel__encabezado {
+    margin-bottom: 22px;
+}
+
+.panel__encabezado h2 {
+    margin: 0 0 6px;
+}
+
+.panel__encabezado p {
+    margin: 0;
+    color: var(--color-texto-secundario);
+}
+
+.marca {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--color-primario-oscuro);
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.marca:hover {
+    text-decoration: none;
+}
+
+.marca__icono {
+    display: grid;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    color: #ffffff;
+    background: linear-gradient(
+        145deg,
+        var(--color-primario),
+        var(--color-secundario)
+    );
+    border-radius: 13px;
+}
+
+@media (max-width: 600px) {
+    .panel {
+        padding: 18px;
+    }
+
+    #seccion-perfil .panel__encabezado {
+        align-items: flex-start;
+    }
+
+    #editar-persona {
+        width: 100%;
+    }
+}

@@ -13,6 +13,7 @@
 
     const solicitar = async (ruta, opciones = {}) => {
         const controlador = new AbortController();
+
         const temporizador = setTimeout(
             () => controlador.abort(),
             config.TIMEOUT_MS
@@ -38,12 +39,15 @@
                 try {
                     datos = JSON.parse(contenido);
                 } catch {
-                    throw new Error('El servidor devolvió una respuesta inválida.');
+                    throw new Error(
+                        'El servidor devolvió una respuesta inválida.'
+                    );
                 }
             }
 
             if (!respuesta.ok) {
                 throw new Error(
+                    datos?.mensaje ||
                     datos?.error ||
                     `Error del servidor: HTTP ${respuesta.status}.`
                 );
@@ -52,11 +56,15 @@
             return datos;
         } catch (error) {
             if (error.name === 'AbortError') {
-                throw new Error('Se agotó el tiempo de espera del servidor.');
+                throw new Error(
+                    'Se agotó el tiempo de espera del servidor.'
+                );
             }
 
             if (error instanceof TypeError) {
-                throw new Error('No se pudo conectar con el backend.');
+                throw new Error(
+                    'No se pudo conectar con el backend.'
+                );
             }
 
             throw error;
@@ -75,6 +83,11 @@
 
         put: (ruta, datos) => solicitar(ruta, {
             method: 'PUT',
+            body: JSON.stringify(datos)
+        }),
+
+        patch: (ruta, datos) => solicitar(ruta, {
+            method: 'PATCH',
             body: JSON.stringify(datos)
         }),
 

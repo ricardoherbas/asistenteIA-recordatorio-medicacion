@@ -1,27 +1,14 @@
 services:
-  caddy:
-    image: caddy:2-alpine
-    container_name: asistente_caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - frontend
-      - backend
-
   frontend:
-    image: nginx:alpine
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: asistente_frontend
     restart: unless-stopped
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-    expose:
-      - "80"
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - backend
 
   db:
     image: postgres:16-alpine
@@ -113,5 +100,3 @@ services:
 volumes:
   postgres_data:
   ollama_data:
-  caddy_data:
-  caddy_config:
