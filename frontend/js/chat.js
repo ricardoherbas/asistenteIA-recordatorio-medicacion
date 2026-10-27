@@ -1,4 +1,3 @@
-
 (() => {
     'use strict';
 
@@ -28,6 +27,8 @@
         duracionMaximaMs: 12000,
         margenInicioMs: 250
     };
+
+    const CLAVE_PERSONA = 'personaAsistenteMedicacion';
 
     let conexion = null;
     let contextoAudio = null;
@@ -90,7 +91,11 @@
         contenedor.append(autor, contenido);
         elementos.listaMensajes.appendChild(contenedor);
 
-        contenedor.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        contenedor.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end'
+        });
+
         return contenedor;
     }
 
@@ -99,35 +104,106 @@
         elementos.estadoConexion.dataset.conectado = String(conectada);
     }
 
-    function enviarInicioAsistente() {
-        let persona = null;
+    /* =========================================
+       Recuperación del perfil del usuario
+    ========================================= */
 
+    function recuperarPersona() {
         try {
-            const guardada = sessionStorage.getItem('persona');
-            persona = guardada ? JSON.parse(guardada) : null;
+            const guardada = localStorage.getItem(CLAVE_PERSONA);
+
+            if (!guardada) {
+                console.warn('Todavía no hay un perfil guardado.');
+                return null;
+            }
+
+            const persona = JSON.parse(guardada);
+
+            if (!persona || typeof persona !== 'object') {
+                console.error('El perfil guardado no es válido.');
+                return null;
+            }
+
+            const usuarioId = Number(persona.id);
+
+            if (!Number.isSafeInteger(usuarioId) || usuarioId <= 0) {
+                console.error('El ID del usuario no es válido.');
+                return null;
+            }
+
+            const nombre = typeof persona.nombre === 'string'
+                ? persona.nombre.trim().slice(0, 80)
+                : '';
+
+            if (!nombre) {
+                console.error('El perfil no tiene un nombre válido.');
+                return null;
+            }
+
+            return {
+                usuarioId,
+                nombre
+            };
         } catch (error) {
             console.error('No se pudo recuperar el perfil:', error);
+            return null;
+        }
+    }
+
+    /* =========================================
+       Saludo inicial con nombre e ID
+    ========================================= */
+
+    function enviarInicioAsistente() {
+        if (!conexion || conexion.readyState !== WebSocket.OPEN) {
+            return;
         }
 
-        const nombre = typeof persona?.nombre === 'string' ? persona.nombre.trim() : '';
+        const persona = recuperarPersona();
 
-        if (!conexion || conexion.readyState !== WebSocket.OPEN) return;
+        if (!persona) {
+            saludoEnCurso = false;
+            saludoFinalizadoServidor = true;
+            ocultarActividad();
+
+            mostrarError(
+                'No se encontró un perfil válido. Creá o revisá tu perfil antes de iniciar el asistente.'
+            );
+
+            return;
+        }
 
         mostrarActividad('Preparando tu saludo...');
 
         conexion.send(JSON.stringify({
             type: 'iniciar_asistente',
-            nombre
+            nombre: persona.nombre,
+            usuarioId: persona.usuarioId
         }));
     }
 
+    /* =========================================
+       Conexión WebSocket
+    ========================================= */
+
     function conectarWebSocket() {
-        if (conexion && (conexion.readyState === WebSocket.OPEN || conexion.readyState === WebSocket.CONNECTING)) return;
+        if (
+            conexion &&
+            (
+                conexion.readyState === WebSocket.OPEN ||
+                conexion.readyState === WebSocket.CONNECTING
+            )
+        ) {
+            return;
+        }
 
         actualizarConexion(false, 'Conectando con el asistente…');
 
         try {
-            conexion = new WebSocket(window.APP_CONFIG.WEBSOCKET_URL);
+            conexion = new WebSocket(
+                window.APP_CONFIG.WEBSOCKET_URL
+            );
+
             conexion.binaryType = 'arraybuffer';
         } catch (error) {
             actualizarConexion(false, 'No se pudo iniciar la conexión.');
@@ -152,15 +228,24 @@
             ocultarActividad();
 
             if (microfonoActivo) {
-                mostrarError('Se perdió la conexión. Volvé a conectarte antes de continuar.');
+                mostrarError(
+                    'Se perdió la conexión. Volvé a conectarte antes de continuar.'
+                );
+
                 detenerCapturaMicrofono();
             }
         });
 
         conexion.addEventListener('error', () => {
-            mostrarError('Ocurrió un problema con la conexión al asistente.');
+            mostrarError(
+                'Ocurrió un problema con la conexión al asistente.'
+            );
         });
     }
+
+    /* =========================================
+       Mensajes recibidos del servidor
+    ========================================= */
 
     function gestionarMensajeServidor(evento) {
         if (typeof evento.data !== 'string') {
@@ -169,7 +254,11 @@
             cadenaDecodificacion = cadenaDecodificacion
                 .then(() => reproducirAudioRecibido(evento.data))
                 .catch((error) => {
-                    console.error('Error al procesar el audio recibido:', error);
+                    console.error(
+                        'Error al procesar el audio recibido:',
+                        error
+                    );
+
                     mostrarError('No se pudo procesar el audio recibido.');
                 })
                 .finally(() => {
@@ -201,14 +290,22 @@
             }
 
             ocultarActividad();
-            mostrarError(mensaje.mensaje || mensaje.error || 'Ocurrió un error.');
+
+            mostrarError(
+                mensaje.mensaje ||
+                mensaje.error ||
+                'Ocurrió un error.'
+            );
+
             comprobarFinSaludo();
             return;
         }
 
         switch (mensaje.tipo) {
             case 'saludo':
-                if (mensaje.texto) agregarMensaje('asistente', mensaje.texto);
+                if (mensaje.texto) {
+                    agregarMensaje('asistente', mensaje.texto);
+                }
                 break;
 
             case 'fin_saludo':
@@ -217,19 +314,29 @@
                 break;
 
             case 'transcripcion':
-                if (mensaje.texto) agregarMensaje('usuario', mensaje.texto);
+                if (mensaje.texto) {
+                    agregarMensaje('usuario', mensaje.texto);
+                }
                 break;
 
             case 'intencion':
-                console.info('Intención detectada:', mensaje.intencion);
+                console.info(
+                    'Intención detectada:',
+                    mensaje.intencion
+                );
                 break;
 
             case 'accion':
-                console.info('Acción determinada por Prolog:', mensaje.accion);
+                console.info(
+                    'Acción determinada por Prolog:',
+                    mensaje.accion
+                );
                 break;
 
             case 'respuesta':
-                if (mensaje.texto) agregarMensaje('asistente', mensaje.texto);
+                if (mensaje.texto) {
+                    agregarMensaje('asistente', mensaje.texto);
+                }
                 break;
 
             case 'fin_respuesta':
@@ -239,13 +346,26 @@
                 break;
 
             default:
-                console.info('Mensaje recibido del backend:', mensaje);
+                console.info(
+                    'Mensaje recibido del backend:',
+                    mensaje
+                );
         }
     }
 
+    /* =========================================
+       Reproducción de audio
+    ========================================= */
+
     async function obtenerAudioContexto() {
-        if (!contextoAudio) contextoAudio = new AudioContext();
-        if (contextoAudio.state === 'suspended') await contextoAudio.resume();
+        if (!contextoAudio) {
+            contextoAudio = new AudioContext();
+        }
+
+        if (contextoAudio.state === 'suspended') {
+            await contextoAudio.resume();
+        }
+
         return contextoAudio;
     }
 
@@ -259,7 +379,11 @@
     }
 
     function reproducirSiguienteAudio() {
-        if (reproduciendoAudio || colaAudio.length === 0 || !contextoAudio) {
+        if (
+            reproduciendoAudio ||
+            colaAudio.length === 0 ||
+            !contextoAudio
+        ) {
             comprobarFinSaludo();
             comprobarFinConsulta();
             return;
@@ -286,6 +410,10 @@
         fuente.start();
     }
 
+    /* =========================================
+       Finalización del saludo
+    ========================================= */
+
     async function comprobarFinSaludo() {
         if (
             !saludoEnCurso ||
@@ -295,7 +423,9 @@
             colaAudio.length > 0 ||
             iniciandoMicrofonoAutomatico ||
             saludoCompletado
-        ) return;
+        ) {
+            return;
+        }
 
         saludoCompletado = true;
         saludoEnCurso = false;
@@ -305,33 +435,78 @@
 
         try {
             await iniciarCapturaMicrofono();
-            mostrarActividad('Ya podés hablar. Te estoy escuchando.');
+
+            mostrarActividad(
+                'Ya podés hablar. Te estoy escuchando.'
+            );
         } catch (error) {
-            console.error('No se pudo activar el micrófono automáticamente:', error);
-            mostrarError('El saludo terminó. Presioná «Activar escucha» para empezar a hablar.');
-            mostrarActividad('Esperando que actives el micrófono.');
+            console.error(
+                'No se pudo activar el micrófono automáticamente:',
+                error
+            );
+
+            mostrarError(
+                'El saludo terminó. Presioná «Activar escucha» para empezar a hablar.'
+            );
+
+            mostrarActividad(
+                'Esperando que actives el micrófono.'
+            );
         } finally {
             iniciandoMicrofonoAutomatico = false;
         }
     }
 
     function comprobarFinConsulta() {
-        if (!respuestaFinalizada || reproduciendoAudio || colaAudio.length > 0 || audiosPendientesDecodificacion > 0) return;
+        if (
+            !respuestaFinalizada ||
+            reproduciendoAudio ||
+            colaAudio.length > 0 ||
+            audiosPendientesDecodificacion > 0
+        ) {
+            return;
+        }
 
         consultaEnCurso = false;
         esperandoRespuesta = false;
         ocultarActividad();
 
-        if (microfonoActivo) mostrarActividad('Micrófono activo. Podés hablar cuando quieras.');
+        if (microfonoActivo) {
+            mostrarActividad(
+                'Micrófono activo. Podés hablar cuando quieras.'
+            );
+        }
     }
 
+    /* =========================================
+       Estado del micrófono
+    ========================================= */
+
     function actualizarEstadoMicrofono(activo) {
-        elementos.botonEscucha.setAttribute('aria-pressed', String(activo));
-        elementos.textoBotonEscucha.textContent = activo ? 'Desactivar micrófono' : 'Activar escucha';
-        elementos.botonEscucha.setAttribute('aria-label', activo ? 'Desactivar micrófono' : 'Activar micrófono');
-        elementos.estadoMicrofono.textContent = activo ? 'Micrófono habilitado' : 'Micrófono desactivado';
+        elementos.botonEscucha.setAttribute(
+            'aria-pressed',
+            String(activo)
+        );
+
+        elementos.textoBotonEscucha.textContent = activo
+            ? 'Desactivar micrófono'
+            : 'Activar escucha';
+
+        elementos.botonEscucha.setAttribute(
+            'aria-label',
+            activo ? 'Desactivar micrófono' : 'Activar micrófono'
+        );
+
+        elementos.estadoMicrofono.textContent = activo
+            ? 'Micrófono habilitado'
+            : 'Micrófono desactivado';
+
         elementos.indicadorMicrofono.dataset.activo = String(activo);
     }
+
+    /* =========================================
+       Captura y procesamiento de voz
+    ========================================= */
 
     function reiniciarSegmentoVoz() {
         fragmentosVoz = [];
@@ -343,25 +518,46 @@
 
     function calcularRMS(muestras) {
         let suma = 0;
-        for (let i = 0; i < muestras.length; i++) suma += muestras[i] * muestras[i];
-        return Math.sqrt(suma / Math.max(1, muestras.length));
+
+        for (let i = 0; i < muestras.length; i++) {
+            suma += muestras[i] * muestras[i];
+        }
+
+        return Math.sqrt(
+            suma / Math.max(1, muestras.length)
+        );
     }
 
     function agregarFragmentoAudio(muestras) {
         const copia = new Float32Array(muestras);
+
         fragmentosVoz.push(copia);
         muestrasTotales += copia.length;
     }
 
     function procesarEntradaMicrofono(evento) {
-        if (!microfonoActivo || saludoEnCurso || consultaEnCurso) return;
+        if (
+            !microfonoActivo ||
+            saludoEnCurso ||
+            consultaEnCurso
+        ) {
+            return;
+        }
 
         const entrada = evento.inputBuffer.getChannelData(0);
         const rms = calcularRMS(entrada);
         const hayVoz = rms >= CONFIG_AUDIO.umbralSilencio;
 
         if (hayVoz) {
-            if (fragmentosVoz.length === 0 && muestrasPrevias.length) agregarFragmentoAudio(new Float32Array(muestrasPrevias));
+            if (
+                fragmentosVoz.length === 0 &&
+                muestrasPrevias.length
+            ) {
+                agregarFragmentoAudio(
+                    new Float32Array(muestrasPrevias)
+                );
+            }
+
             agregarFragmentoAudio(entrada);
             muestrasVoz += entrada.length;
             muestrasSilencio = 0;
@@ -371,19 +567,32 @@
         } else {
             muestrasPrevias.push(...entrada);
 
-            const maximoPrevio = Math.floor(contextoAudio.sampleRate * CONFIG_AUDIO.margenInicioMs / 1000);
+            const maximoPrevio = Math.floor(
+                contextoAudio.sampleRate *
+                CONFIG_AUDIO.margenInicioMs / 1000
+            );
 
             if (muestrasPrevias.length > maximoPrevio) {
-                muestrasPrevias = muestrasPrevias.slice(muestrasPrevias.length - maximoPrevio);
+                muestrasPrevias = muestrasPrevias.slice(
+                    muestrasPrevias.length - maximoPrevio
+                );
             }
 
             return;
         }
 
-        const duracionSilencioMs = muestrasSilencio / contextoAudio.sampleRate * 1000;
-        const duracionTotalMs = muestrasTotales / contextoAudio.sampleRate * 1000;
+        const duracionSilencioMs =
+            muestrasSilencio / contextoAudio.sampleRate * 1000;
 
-        if (duracionSilencioMs >= CONFIG_AUDIO.duracionSilencioMs || duracionTotalMs >= CONFIG_AUDIO.duracionMaximaMs) finalizarSegmentoVoz();
+        const duracionTotalMs =
+            muestrasTotales / contextoAudio.sampleRate * 1000;
+
+        if (
+            duracionSilencioMs >= CONFIG_AUDIO.duracionSilencioMs ||
+            duracionTotalMs >= CONFIG_AUDIO.duracionMaximaMs
+        ) {
+            finalizarSegmentoVoz();
+        }
     }
 
     function unirFragmentos(fragmentos, longitudTotal) {
@@ -398,20 +607,37 @@
         return resultado;
     }
 
-    function remuestrearPCM(muestras, frecuenciaOrigen, frecuenciaDestino) {
-        if (frecuenciaOrigen === frecuenciaDestino) return new Float32Array(muestras);
+    function remuestrearPCM(
+        muestras,
+        frecuenciaOrigen,
+        frecuenciaDestino
+    ) {
+        if (frecuenciaOrigen === frecuenciaDestino) {
+            return new Float32Array(muestras);
+        }
 
         const proporcion = frecuenciaOrigen / frecuenciaDestino;
-        const longitudDestino = Math.floor(muestras.length / proporcion);
+        const longitudDestino = Math.floor(
+            muestras.length / proporcion
+        );
+
         const resultado = new Float32Array(longitudDestino);
 
         for (let i = 0; i < longitudDestino; i++) {
             const posicion = i * proporcion;
             const indice = Math.floor(posicion);
             const fraccion = posicion - indice;
+
             const muestraInicial = muestras[indice] || 0;
-            const muestraSiguiente = muestras[Math.min(indice + 1, muestras.length - 1)] || 0;
-            resultado[i] = muestraInicial + (muestraSiguiente - muestraInicial) * fraccion;
+
+            const muestraSiguiente =
+                muestras[
+                    Math.min(indice + 1, muestras.length - 1)
+                ] || 0;
+
+            resultado[i] =
+                muestraInicial +
+                (muestraSiguiente - muestraInicial) * fraccion;
         }
 
         return resultado;
@@ -421,8 +647,14 @@
         const resultado = new Int16Array(muestrasFloat.length);
 
         for (let i = 0; i < muestrasFloat.length; i++) {
-            const muestra = Math.max(-1, Math.min(1, muestrasFloat[i]));
-            resultado[i] = muestra < 0 ? muestra * 32768 : muestra * 32767;
+            const muestra = Math.max(
+                -1,
+                Math.min(1, muestrasFloat[i])
+            );
+
+            resultado[i] = muestra < 0
+                ? muestra * 32768
+                : muestra * 32767;
         }
 
         return resultado;
@@ -434,30 +666,61 @@
             return;
         }
 
-        const duracionMs = muestrasTotales / contextoAudio.sampleRate * 1000;
-        const tuvoVozSuficiente = muestrasVoz / contextoAudio.sampleRate * 1000 >= CONFIG_AUDIO.duracionMinimaMs;
-        const muestras = unirFragmentos(fragmentosVoz, muestrasTotales);
+        const duracionMs =
+            muestrasTotales / contextoAudio.sampleRate * 1000;
+
+        const tuvoVozSuficiente =
+            muestrasVoz / contextoAudio.sampleRate * 1000 >=
+            CONFIG_AUDIO.duracionMinimaMs;
+
+        const muestras = unirFragmentos(
+            fragmentosVoz,
+            muestrasTotales
+        );
 
         reiniciarSegmentoVoz();
 
-        if (duracionMs < CONFIG_AUDIO.duracionMinimaMs || !tuvoVozSuficiente) return;
+        if (
+            duracionMs < CONFIG_AUDIO.duracionMinimaMs ||
+            !tuvoVozSuficiente
+        ) {
+            return;
+        }
+
         enviarAudioPCM(muestras);
     }
 
     function enviarAudioPCM(muestrasFloat) {
-        if (!microfonoActivo || saludoEnCurso) return;
-
-        if (!conexion || conexion.readyState !== WebSocket.OPEN) {
-            mostrarError('No hay conexión con el asistente. No se pudo enviar la frase.');
+        if (!microfonoActivo || saludoEnCurso) {
             return;
         }
 
-        if (consultaEnCurso) return;
+        if (
+            !conexion ||
+            conexion.readyState !== WebSocket.OPEN
+        ) {
+            mostrarError(
+                'No hay conexión con el asistente. No se pudo enviar la frase.'
+            );
 
-        const muestrasRemuestreadas = remuestrearPCM(muestrasFloat, contextoAudio.sampleRate, CONFIG_AUDIO.frecuenciaDestino);
+            return;
+        }
+
+        if (consultaEnCurso) {
+            return;
+        }
+
+        const muestrasRemuestreadas = remuestrearPCM(
+            muestrasFloat,
+            contextoAudio.sampleRate,
+            CONFIG_AUDIO.frecuenciaDestino
+        );
+
         const pcm = convertirAInt16(muestrasRemuestreadas);
 
-        if (pcm.length === 0) return;
+        if (pcm.length === 0) {
+            return;
+        }
 
         consultaEnCurso = true;
         esperandoRespuesta = true;
@@ -471,43 +734,80 @@
         } catch (error) {
             consultaEnCurso = false;
             esperandoRespuesta = false;
-            mostrarError('No se pudo enviar el audio al asistente.');
+
+            mostrarError(
+                'No se pudo enviar el audio al asistente.'
+            );
+
             console.error('Error al enviar PCM:', error);
         }
     }
 
+    /* =========================================
+       Activar y detener micrófono
+    ========================================= */
+
     async function iniciarCapturaMicrofono() {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('El navegador no permite acceder al micrófono. Usá localhost o una conexión HTTPS.');
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
+            throw new Error(
+                'El navegador no permite acceder al micrófono. Usá localhost o una conexión HTTPS.'
+            );
         }
 
-        if (!conexion || conexion.readyState !== WebSocket.OPEN) throw new Error('Todavía no hay conexión con el asistente.');
+        if (
+            !conexion ||
+            conexion.readyState !== WebSocket.OPEN
+        ) {
+            throw new Error(
+                'Todavía no hay conexión con el asistente.'
+            );
+        }
 
-        if (microfonoActivo) return;
+        if (microfonoActivo) {
+            return;
+        }
 
         flujoMicrofono = await navigator.mediaDevices.getUserMedia({
-            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            audio: {
+                channelCount: 1,
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
         });
 
         try {
             const contexto = await obtenerAudioContexto();
 
-            fuenteMicrofono = contexto.createMediaStreamSource(flujoMicrofono);
-            procesadorMicrofono = contexto.createScriptProcessor(4096, 1, 1);
+            fuenteMicrofono =
+                contexto.createMediaStreamSource(flujoMicrofono);
+
+            procesadorMicrofono =
+                contexto.createScriptProcessor(4096, 1, 1);
+
             nodoSilencio = contexto.createGain();
             nodoSilencio.gain.value = 0;
 
-            procesadorMicrofono.onaudioprocess = procesarEntradaMicrofono;
+            procesadorMicrofono.onaudioprocess =
+                procesarEntradaMicrofono;
+
             fuenteMicrofono.connect(procesadorMicrofono);
             procesadorMicrofono.connect(nodoSilencio);
             nodoSilencio.connect(contexto.destination);
 
             microfonoActivo = true;
+
             reiniciarSegmentoVoz();
             actualizarEstadoMicrofono(true);
             ocultarError();
         } catch (error) {
-            flujoMicrofono.getTracks().forEach((pista) => pista.stop());
+            flujoMicrofono.getTracks().forEach(
+                (pista) => pista.stop()
+            );
+
             flujoMicrofono = null;
             throw error;
         }
@@ -523,29 +823,44 @@
 
         if (procesadorMicrofono) {
             procesadorMicrofono.onaudioprocess = null;
-            try { procesadorMicrofono.disconnect(); } catch {}
+
+            try {
+                procesadorMicrofono.disconnect();
+            } catch {}
+
             procesadorMicrofono = null;
         }
 
         if (fuenteMicrofono) {
-            try { fuenteMicrofono.disconnect(); } catch {}
+            try {
+                fuenteMicrofono.disconnect();
+            } catch {}
+
             fuenteMicrofono = null;
         }
 
         if (nodoSilencio) {
-            try { nodoSilencio.disconnect(); } catch {}
+            try {
+                nodoSilencio.disconnect();
+            } catch {}
+
             nodoSilencio = null;
         }
 
         if (flujoMicrofono) {
-            flujoMicrofono.getTracks().forEach((pista) => pista.stop());
+            flujoMicrofono.getTracks().forEach(
+                (pista) => pista.stop()
+            );
+
             flujoMicrofono = null;
         }
 
         reiniciarSegmentoVoz();
         actualizarEstadoMicrofono(false);
 
-        if (!consultaEnCurso && !saludoEnCurso) ocultarActividad();
+        if (!consultaEnCurso && !saludoEnCurso) {
+            ocultarActividad();
+        }
     }
 
     async function alternarMicrofono() {
@@ -556,44 +871,82 @@
 
         try {
             await iniciarCapturaMicrofono();
-            mostrarActividad('Micrófono activo. Hablá y hacé una pausa al terminar.');
+
+            mostrarActividad(
+                'Micrófono activo. Hablá y hacé una pausa al terminar.'
+            );
         } catch (error) {
-            console.error('Error al iniciar el micrófono:', error);
+            console.error(
+                'Error al iniciar el micrófono:',
+                error
+            );
+
             detenerCapturaMicrofono();
-            mostrarError(error.message || 'No se pudo acceder al micrófono. Revisá los permisos.');
+
+            mostrarError(
+                error.message ||
+                'No se pudo acceder al micrófono. Revisá los permisos.'
+            );
         }
     }
 
+    /* =========================================
+       Acciones todavía no implementadas
+    ========================================= */
+
     function enviarMensajeTexto() {
         const texto = elementos.textoMensaje.value.trim();
+
         if (!texto) return;
 
-        mostrarError('El envío de mensajes escritos todavía no está implementado en el WebSocket del backend.');
+        mostrarError(
+            'El envío de mensajes escritos todavía no está implementado en el WebSocket del backend.'
+        );
     }
 
-    elementos.botonEscucha.addEventListener('click', alternarMicrofono);
+    elementos.botonEscucha.addEventListener(
+        'click',
+        alternarMicrofono
+    );
 
-    elementos.formularioMensaje.addEventListener('submit', (evento) => {
-        evento.preventDefault();
-        enviarMensajeTexto();
-    });
+    elementos.formularioMensaje.addEventListener(
+        'submit',
+        (evento) => {
+            evento.preventDefault();
+            enviarMensajeTexto();
+        }
+    );
 
-    elementos.botonConfirmarToma.addEventListener('click', () => {
-        mostrarError('La confirmación de una toma todavía no está conectada a un registro persistente.');
-    });
+    elementos.botonConfirmarToma.addEventListener(
+        'click',
+        () => {
+            mostrarError(
+                'La confirmación de una toma todavía no está conectada a un registro persistente.'
+            );
+        }
+    );
 
     window.addEventListener('beforeunload', () => {
         detenerCapturaMicrofono();
 
-        if (conexion) conexion.close();
+        if (conexion) {
+            conexion.close();
+        }
 
         if (fuenteAudioActual) {
-            try { fuenteAudioActual.stop(); } catch {}
+            try {
+                fuenteAudioActual.stop();
+            } catch {}
         }
 
         colaAudio = [];
 
-        if (contextoAudio && contextoAudio.state !== 'closed') contextoAudio.close();
+        if (
+            contextoAudio &&
+            contextoAudio.state !== 'closed'
+        ) {
+            contextoAudio.close();
+        }
     });
 
     actualizarEstadoMicrofono(false);

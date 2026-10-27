@@ -46,11 +46,14 @@ const consultarGemma = async (prompt, signal, onFragment) => {
         return await new Promise((resolve, reject) => {
             let finalizado = false;
             let procesando = false;
-            let cola = [];
-            let lineaFinalPendiente = false;
+            let flujoTerminado = false;
+            const cola = [];
 
             const limpiar = () => {
-                flujo.removeAllListeners();
+                flujo.removeListener('data', recibirDatos);
+                flujo.removeListener('end', alFinalizarFlujo);
+                flujo.removeListener('error', alOcurrirError);
+                flujo.removeListener('close', alCerrarFlujo);
                 signal?.removeEventListener('abort', cancelar);
             };
 
@@ -61,7 +64,6 @@ const consultarGemma = async (prompt, signal, onFragment) => {
                 limpiar();
 
                 if (error) {
-                    flujo.destroy();
                     reject(error);
                     return;
                 }
@@ -97,15 +99,22 @@ const consultarGemma = async (prompt, signal, onFragment) => {
                             }
                         }
 
-                        if (mensaje.done) {
+                        if (mensaje.done === true) {
                             finalizar();
                             return;
                         }
                     }
 
-                    if (lineaFinalPendiente && !finalizado) {
-                        lineaFinalPendiente = false;
-                        finalizar();
+                    if (flujoTerminado && !finalizado) {
+                        if (buffer.trim()) {
+                            throw new Error(
+                                'Ollama terminó el flujo con datos JSON incompletos.'
+                            );
+                        }
+
+                        throw new Error(
+                            'Ollama terminó el flujo sin enviar done: true.'
+                        );
                     }
                 } catch (error) {
                     finalizar(
@@ -118,11 +127,15 @@ const consultarGemma = async (prompt, signal, onFragment) => {
 
                     if (!finalizado && cola.length > 0) {
                         procesarCola();
+                    } else if (!finalizado && flujoTerminado) {
+                        procesarCola();
                     }
                 }
             };
 
             const recibirDatos = (datos) => {
+                if (finalizado) return;
+
                 buffer += datos.toString('utf8');
 
                 const lineas = buffer.split('\n');
@@ -135,7 +148,9 @@ const consultarGemma = async (prompt, signal, onFragment) => {
                         cola.push(JSON.parse(linea));
                     } catch {
                         finalizar(
-                            new Error('Ollama devolvió una respuesta JSON inválida.')
+                            new Error(
+                                'Ollama devolvió una respuesta JSON inválida.'
+                            )
                         );
                         return;
                     }
@@ -144,18 +159,13 @@ const consultarGemma = async (prompt, signal, onFragment) => {
                 procesarCola();
             };
 
-            const cancelar = () => {
-                finalizar(new Error('PIPELINE_CANCELADO'));
-            };
+            const alFinalizarFlujo = () => {
+                if (finalizado) return;
 
-            signal?.addEventListener('abort', cancelar, { once: true });
-
-            flujo.on('data', recibirDatos);
-
-            flujo.on('end', () => {
                 if (buffer.trim()) {
                     try {
                         cola.push(JSON.parse(buffer));
+                        buffer = '';
                     } catch {
                         finalizar(
                             new Error(
@@ -166,11 +176,18 @@ const consultarGemma = async (prompt, signal, onFragment) => {
                     }
                 }
 
-                lineaFinalPendiente = true;
+                flujoTerminado = true;
                 procesarCola();
-            });
+            };
 
-            flujo.on('error', (error) => {
+            const cancelar = () => {
+                finalizar(new Error('PIPELINE_CANCELADO'));
+                flujo.destroy();
+            };
+
+            const alOcurrirError = (error) => {
+                if (finalizado) return;
+
                 if (signal?.aborted || error.code === 'ERR_CANCELED') {
                     finalizar(new Error('PIPELINE_CANCELADO'));
                     return;
@@ -181,31 +198,38 @@ const consultarGemma = async (prompt, signal, onFragment) => {
                         `Error durante la generación de Gemma: ${error.message}`
                     )
                 );
-            });
+            };
 
-            flujo.on('close', () => {
-                if (!finalizado) {
-                    finalizar(
-                        signal?.aborted
-                            ? new Error('PIPELINE_CANCELADO')
-                            : new Error(
-                                'La conexión con Ollama se cerró antes de completar la respuesta.'
-                            )
-                    );
-                }
-            });
+            const alCerrarFlujo = () => {
+                if (finalizado || flujoTerminado) return;
+
+                finalizar(
+                    signal?.aborted
+                        ? new Error('PIPELINE_CANCELADO')
+                        : new Error(
+                            'La conexión con Ollama se cerró antes de completar la respuesta.'
+                        )
+                );
+            };
+
+            signal?.addEventListener('abort', cancelar, { once: true });
+
+            flujo.on('data', recibirDatos);
+            flujo.on('end', alFinalizarFlujo);
+            flujo.on('error', alOcurrirError);
+            flujo.on('close', alCerrarFlujo);
         });
     } catch (error) {
         if (signal?.aborted || error.code === 'ERR_CANCELED') {
             throw new Error('PIPELINE_CANCELADO');
         }
 
-        if (error.response?.data?.error) {
-            throw new Error(`Error de Gemma: ${error.response.data.error}`);
-        }
-
         if (error.message?.startsWith('Error de Gemma:')) {
             throw error;
+        }
+
+        if (error.response?.data?.error) {
+            throw new Error(`Error de Gemma: ${error.response.data.error}`);
         }
 
         throw new Error(`No se pudo consultar Gemma: ${error.message}`);

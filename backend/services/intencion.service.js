@@ -22,6 +22,33 @@ const INTENCIONES = {
         'me olvide de tomarlo',
         'todavia no'
     ],
+    consultar_medicamentos: [
+        'que medicamentos tengo',
+        'que medicacion tengo',
+        'que medicamentos tengo registrados',
+        'que medicacion tengo registrada',
+        'que medicamentos tengo guardados',
+        'que medicamento tengo registrado',
+        'que medicamento estoy tomando',
+        'que medicacion estoy tomando',
+        'que dosis tengo',
+        'que dosis tengo registrada',
+        'cual es mi dosis',
+        'cual es la dosis',
+        'dosis registrada',
+        'dosis del medicamento',
+        'dosis de mi medicamento',
+        'que instrucciones tiene',
+        'cuales son las instrucciones',
+        'como tengo que tomar el medicamento',
+        'como debo tomar el medicamento',
+        'mostrame mis medicamentos',
+        'mostrar mis medicamentos',
+        'listar medicamentos',
+        'lista de medicamentos',
+        'medicamentos registrados',
+        'medicacion registrada'
+    ],
     consultar_horario: [
         'a que hora',
         'cuando me toca',
@@ -64,7 +91,7 @@ const extraerDatos = (textoOriginal) => {
         /\b(?:a las|a la|para las|para la)\s+(\d{1,2})(?::(\d{2}))?\b/
     );
 
-    return {
+    const datos = {
         horario: horaEncontrada
             ? {
                 hora: Number(horaEncontrada[1]),
@@ -72,69 +99,80 @@ const extraerDatos = (textoOriginal) => {
             }
             : null
     };
+
+    return datos;
 };
 
 const analizarIntencion = (textoOriginal) => {
-    if (
-        typeof textoOriginal !== 'string' ||
-        !textoOriginal.trim()
-    ) {
-        return {
+    console.log('\n========== CLASIFICADOR DE INTENCIÓN ==========');
+    console.log('[INTENCION] Texto original:', textoOriginal);
+
+    if (typeof textoOriginal !== 'string' || !textoOriginal.trim()) {
+        const resultado = {
             intencion: 'respuesta_ambigua',
             datos: {},
             motivo: 'texto_vacio'
         };
+
+        console.log('[INTENCION] Resultado:', JSON.stringify(resultado));
+        console.log('===============================================\n');
+
+        return resultado;
     }
 
     const texto = normalizarTexto(textoOriginal);
     const datos = extraerDatos(textoOriginal);
 
-    // Primero detectamos preguntas de horario.
-    if (contieneFrase(texto, INTENCIONES.consultar_horario)) {
-        return {
+    console.log('[INTENCION] Texto normalizado:', texto);
+    console.log('[INTENCION] Datos extraídos:', JSON.stringify(datos));
+
+    let resultado;
+
+    if (contieneFrase(texto, INTENCIONES.consultar_medicamentos)) {
+        resultado = {
+            intencion: 'consultar_medicamentos',
+            datos
+        };
+    } else if (contieneFrase(texto, INTENCIONES.consultar_horario)) {
+        resultado = {
             intencion: 'consultar_horario',
             datos
         };
-    }
-
-    // Después detectamos negaciones explícitas.
-    if (contieneFrase(texto, INTENCIONES.no_tome)) {
-        return {
+    } else if (contieneFrase(texto, INTENCIONES.no_tome)) {
+        resultado = {
             intencion: 'no_tome',
             datos
         };
-    }
-
-    // Rechazar no equivale necesariamente a no haber tomado la dosis.
-    if (contieneFrase(texto, INTENCIONES.rechazar_recordatorio)) {
-        return {
+    } else if (contieneFrase(texto, INTENCIONES.rechazar_recordatorio)) {
+        resultado = {
             intencion: 'rechazar_recordatorio',
             datos
         };
-    }
-
-    // Solo confirmamos si encontramos una expresión explícita.
-    if (contieneFrase(texto, INTENCIONES.confirmar_toma)) {
-        return {
+    } else if (contieneFrase(texto, INTENCIONES.confirmar_toma)) {
+        resultado = {
             intencion: 'confirmar_toma',
             datos
         };
-    }
-
-    // Una respuesta corta requiere el contexto de la conversación.
-    if (/^(si|no|puede ser|no se|quizas|tal vez)$/.test(texto)) {
-        return {
+    } else if (/^(si|no|puede ser|no se|quizas|tal vez)$/.test(texto)) {
+        resultado = {
             intencion: 'respuesta_ambigua',
             datos,
             motivo: 'requiere_contexto'
         };
+    } else {
+        resultado = {
+            intencion: 'respuesta_ambigua',
+            datos,
+            motivo: 'intencion_no_reconocida'
+        };
     }
 
-    return {
-        intencion: 'respuesta_ambigua',
-        datos,
-        motivo: 'intencion_no_reconocida'
-    };
+    console.log('[INTENCION] Intención detectada:', resultado.intencion);
+    console.log('[INTENCION] Motivo:', resultado.motivo || 'ninguno');
+    console.log('[INTENCION] Resultado completo:', JSON.stringify(resultado));
+    console.log('===============================================\n');
+
+    return resultado;
 };
 
 module.exports = {

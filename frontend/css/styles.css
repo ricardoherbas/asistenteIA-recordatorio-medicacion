@@ -1,33 +1,37 @@
-/* Variables globales */
+/* =========================================
+   VARIABLES GLOBALES
+========================================= */
 
 :root {
-    --color-primario: #1877c9;
-    --color-primario-oscuro: #125fa3;
-    --color-primario-claro: #eaf4ff;
-    --color-secundario: #38bdf8;
+    --color-primario: #8b5cf6;
+    --color-primario-oscuro: #7c3aed;
+    --color-primario-claro: rgba(139, 92, 246, 0.18);
+    --color-secundario: #a78bfa;
 
-    --color-fondo: #f3f7fc;
-    --color-superficie: #ffffff;
-    --color-texto: #1e293b;
-    --color-texto-secundario: #64748b;
-    --color-borde: #dbe5f0;
+    --color-fondo: #1f1c2c;
+    --color-superficie: rgba(255, 255, 255, 0.10);
+    --color-texto: #ffffff;
+    --color-texto-secundario: #dedbe8;
+    --color-borde: rgba(255, 255, 255, 0.18);
 
-    --color-exito: #15803d;
-    --color-exito-fondo: #dcfce7;
-    --color-error: #b42318;
-    --color-error-fondo: #fef2f2;
-    --color-advertencia: #a16207;
-    --color-advertencia-fondo: #fef9c3;
+    --color-exito: #4ade80;
+    --color-exito-fondo: rgba(74, 222, 128, 0.12);
+    --color-error: #f87171;
+    --color-error-fondo: rgba(248, 113, 113, 0.12);
+    --color-advertencia: #fbbf24;
+    --color-advertencia-fondo: rgba(251, 191, 36, 0.12);
 
     --radio-pequeno: 8px;
     --radio-medio: 14px;
     --radio-grande: 22px;
 
-    --sombra-tarjeta: 0 8px 28px rgba(31, 65, 103, 0.07);
+    --sombra-tarjeta: 0 8px 32px rgba(0, 0, 0, 0.20);
     --transicion: 180ms ease;
 }
 
-/* Reinicio */
+/* =========================================
+   REINICIO
+========================================= */
 
 *,
 *::before,
@@ -45,12 +49,17 @@ body {
     min-width: 320px;
     min-height: 100vh;
     color: var(--color-texto);
-    background: var(--color-fondo);
+    background: linear-gradient(
+        135deg,
+        #1f1c2c,
+        #928dab
+    );
+    background-attachment: fixed;
     font-family:
-        Inter,
-        -apple-system,
-        BlinkMacSystemFont,
         "Segoe UI",
+        Roboto,
+        Helvetica,
+        Arial,
         sans-serif;
     font-size: 16px;
     line-height: 1.5;
@@ -73,7 +82,7 @@ button:disabled {
 }
 
 a {
-    color: var(--color-primario);
+    color: #c4b5fd;
     text-decoration: none;
 }
 
@@ -90,7 +99,9 @@ svg {
     display: none !important;
 }
 
-/* Contenedor principal */
+/* =========================================
+   CONTENEDOR PRINCIPAL
+========================================= */
 
 .contenedor {
     width: min(1120px, calc(100% - 40px));
@@ -98,16 +109,17 @@ svg {
 }
 
 /* =========================================
-   Encabezado y navegación
+   ENCABEZADO Y NAVEGACIÓN
 ========================================= */
 
 .encabezado {
     position: sticky;
     z-index: 10;
     top: 0;
-    background: rgba(255, 255, 255, 0.96);
+    background: rgba(31, 28, 44, 0.80);
     border-bottom: 1px solid var(--color-borde);
     backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 .encabezado__contenido {
@@ -123,7 +135,7 @@ svg {
     align-items: center;
     gap: 12px;
     min-width: 0;
-    color: var(--color-primario-oscuro);
+    color: #ffffff;
     font-size: 1.3rem;
     font-weight: 800;
     letter-spacing: -0.04em;
@@ -178,13 +190,13 @@ svg {
 
 .navegacion a:hover,
 .navegacion a[aria-current="page"] {
-    color: var(--color-primario-oscuro);
+    color: #ffffff;
     background: var(--color-primario-claro);
     text-decoration: none;
 }
 
 /* =========================================
-   Títulos y contenido general
+   TÍTULOS Y CONTENIDO GENERAL
 ========================================= */
 
 .pagina {
@@ -197,6 +209,7 @@ svg {
 
 .pagina__encabezado h1 {
     margin: 0 0 8px;
+    color: #ffffff;
     font-size: clamp(1.8rem, 4vw, 2.5rem);
     font-weight: 800;
     line-height: 1.2;
@@ -223,42 +236,54 @@ svg {
 
 .seccion__encabezado h2 {
     margin: 0;
+    color: #ffffff;
     font-size: 1.3rem;
     font-weight: 750;
 }
 
 /* =========================================
-   Tarjetas y paneles
+   TARJETAS Y PANELES
 ========================================= */
 
-.tarjeta {
+.tarjeta,
+.panel {
     min-width: 0;
     padding: 26px;
     background: var(--color-superficie);
     border: 1px solid var(--color-borde);
     border-radius: var(--radio-grande);
     box-shadow: var(--sombra-tarjeta);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
-.tarjeta__encabezado {
+.panel {
+    margin-bottom: 28px;
+}
+
+.tarjeta__encabezado,
+.panel__encabezado {
     margin-bottom: 22px;
 }
 
 .tarjeta__encabezado h2,
-.tarjeta__encabezado h3 {
+.tarjeta__encabezado h3,
+.panel__encabezado h2 {
     margin: 0 0 6px;
+    color: #ffffff;
     font-size: 1.2rem;
     font-weight: 750;
 }
 
-.tarjeta__encabezado p {
+.tarjeta__encabezado p,
+.panel__encabezado p {
     margin: 0;
     color: var(--color-texto-secundario);
     font-size: 0.92rem;
 }
 
 /* =========================================
-   Formularios
+   FORMULARIOS
 ========================================= */
 
 .formulario {
@@ -283,7 +308,7 @@ svg {
 
 .campo label,
 .campo__etiqueta {
-    color: #334155;
+    color: #ffffff;
     font-size: 0.92rem;
     font-weight: 700;
 }
@@ -295,9 +320,9 @@ svg {
     min-width: 0;
     min-height: 48px;
     padding: 12px 14px;
-    color: var(--color-texto);
-    background: #f8fbff;
-    border: 1px solid #cbd9e8;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--color-borde);
     border-radius: 11px;
     outline: none;
     transition:
@@ -313,16 +338,16 @@ svg {
 
 .campo input::placeholder,
 .campo textarea::placeholder {
-    color: #8a9bb0;
+    color: rgba(255, 255, 255, 0.55);
     opacity: 1;
 }
 
 .campo input:focus,
 .campo textarea:focus,
 .campo select:focus {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.16);
     border-color: var(--color-primario);
-    box-shadow: 0 0 0 4px rgba(24, 119, 201, 0.12);
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.20);
 }
 
 .campo input:disabled,
@@ -332,6 +357,16 @@ svg {
     opacity: 0.65;
 }
 
+.campo select option {
+    color: #ffffff;
+    background: #302b45;
+}
+
+.campo input[type="date"],
+.campo input[type="time"] {
+    color-scheme: dark;
+}
+
 .campo__ayuda {
     margin: 0;
     color: var(--color-texto-secundario);
@@ -339,7 +374,7 @@ svg {
 }
 
 /* =========================================
-   Horarios de medicación
+   HORARIOS DE MEDICACIÓN
 ========================================= */
 
 .lista-horarios {
@@ -397,8 +432,8 @@ svg {
     min-width: 43px;
     min-height: 40px;
     padding: 8px 10px;
-    color: #52657b;
-    background: #f8fbff;
+    color: var(--color-texto-secundario);
+    background: rgba(255, 255, 255, 0.10);
     border: 1px solid var(--color-borde);
     border-radius: 10px;
     font-size: 0.85rem;
@@ -416,12 +451,12 @@ svg {
 }
 
 .dia-opcion input:focus-visible + span {
-    outline: 3px solid rgba(56, 189, 248, 0.6);
+    outline: 3px solid rgba(167, 139, 250, 0.7);
     outline-offset: 3px;
 }
 
 /* =========================================
-   Botones
+   BOTONES
 ========================================= */
 
 .boton {
@@ -431,8 +466,8 @@ svg {
     gap: 9px;
     min-height: 45px;
     padding: 11px 17px;
-    color: var(--color-texto);
-    background: #ffffff;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
     border: 1px solid var(--color-borde);
     border-radius: 12px;
     font-size: 0.92rem;
@@ -448,47 +483,56 @@ svg {
 }
 
 .boton:hover:not(:disabled) {
-    border-color: #a9cbea;
-    background: #f5f9ff;
+    color: #ffffff;
+    border-color: rgba(196, 181, 253, 0.6);
+    background: rgba(255, 255, 255, 0.20);
+    transform: translateY(-2px);
 }
 
 .boton:active:not(:disabled) {
-    transform: translateY(1px);
+    transform: translateY(0);
 }
 
 .boton:focus-visible {
-    outline: 3px solid rgba(56, 189, 248, 0.6);
+    outline: 3px solid rgba(167, 139, 250, 0.7);
     outline-offset: 3px;
 }
 
-.boton--primario {
+.boton--primario,
+.boton--principal {
     color: #ffffff;
     background: var(--color-primario);
     border-color: var(--color-primario);
-    box-shadow: 0 6px 15px rgba(24, 119, 201, 0.17);
+    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.30);
 }
 
-.boton--primario:hover:not(:disabled) {
+.boton--primario:hover:not(:disabled),
+.boton--principal:hover:not(:disabled) {
     color: #ffffff;
     background: var(--color-primario-oscuro);
     border-color: var(--color-primario-oscuro);
 }
 
 .boton--secundario {
-    color: var(--color-primario-oscuro);
+    color: #e9ddff;
     background: var(--color-primario-claro);
-    border-color: #c5e0fb;
+    border-color: rgba(167, 139, 250, 0.35);
+}
+
+.boton--secundario:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.30);
 }
 
 .boton--peligro {
-    color: var(--color-error);
-    background: #fff7f7;
-    border-color: #fecaca;
+    color: #fecaca;
+    background: rgba(220, 38, 38, 0.15);
+    border-color: rgba(248, 113, 113, 0.35);
 }
 
 .boton--peligro:hover:not(:disabled) {
-    background: var(--color-error-fondo);
-    border-color: #fca5a5;
+    color: #ffffff;
+    background: rgba(220, 38, 38, 0.30);
+    border-color: #f87171;
 }
 
 .boton--pequeno {
@@ -510,7 +554,7 @@ svg {
 }
 
 /* =========================================
-   Lista de medicamentos
+   LISTA DE MEDICAMENTOS
 ========================================= */
 
 .lista-medicamentos {
@@ -525,10 +569,20 @@ svg {
     gap: 17px;
     min-width: 0;
     padding: 22px;
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.10);
     border: 1px solid var(--color-borde);
     border-radius: var(--radio-medio);
     box-shadow: var(--sombra-tarjeta);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition:
+        transform var(--transicion),
+        background-color var(--transicion);
+}
+
+.medicamento:hover {
+    transform: translateY(-3px);
+    background: rgba(255, 255, 255, 0.14);
 }
 
 .medicamento__encabezado {
@@ -540,6 +594,7 @@ svg {
 
 .medicamento__encabezado h3 {
     margin: 0 0 4px;
+    color: #ffffff;
     font-size: 1.12rem;
     overflow-wrap: anywhere;
 }
@@ -560,7 +615,7 @@ svg {
 }
 
 .medicamento__detalle li {
-    color: #475569;
+    color: var(--color-texto-secundario);
     font-size: 0.9rem;
     overflow-wrap: anywhere;
 }
@@ -571,7 +626,7 @@ svg {
     flex-wrap: wrap;
     margin-top: auto;
     padding-top: 14px;
-    border-top: 1px solid #edf2f8;
+    border-top: 1px solid var(--color-borde);
 }
 
 .estado-vacio {
@@ -579,8 +634,8 @@ svg {
     padding: 35px 22px;
     color: var(--color-texto-secundario);
     text-align: center;
-    background: #ffffff;
-    border: 1px dashed #cbd9e8;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.30);
     border-radius: var(--radio-medio);
 }
 
@@ -595,7 +650,7 @@ svg {
     min-width: 30px;
     min-height: 30px;
     padding: 4px 9px;
-    color: var(--color-primario-oscuro);
+    color: #e9ddff;
     background: var(--color-primario-claro);
     border-radius: 9px;
     font-size: 0.84rem;
@@ -603,7 +658,7 @@ svg {
 }
 
 /* =========================================
-   Estados y mensajes informativos
+   ESTADOS Y MENSAJES INFORMATIVOS
 ========================================= */
 
 .mensaje {
@@ -617,21 +672,21 @@ svg {
 }
 
 .mensaje--error {
-    color: var(--color-error);
+    color: #fecaca;
     background: var(--color-error-fondo);
-    border-color: #fecaca;
+    border-color: rgba(248, 113, 113, 0.35);
 }
 
 .mensaje--exito {
-    color: var(--color-exito);
+    color: #bbf7d0;
     background: var(--color-exito-fondo);
-    border-color: #bbf7d0;
+    border-color: rgba(74, 222, 128, 0.35);
 }
 
 .mensaje--advertencia {
-    color: var(--color-advertencia);
+    color: #fde68a;
     background: var(--color-advertencia-fondo);
-    border-color: #fde68a;
+    border-color: rgba(251, 191, 36, 0.35);
 }
 
 .texto-secundario {
@@ -639,7 +694,7 @@ svg {
 }
 
 /* =========================================
-   Asistente de voz
+   ASISTENTE DE VOZ
 ========================================= */
 
 .chat {
@@ -657,10 +712,11 @@ svg {
     min-width: 0;
     padding: 13px 16px;
     color: var(--color-texto-secundario);
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.10);
     border: 1px solid var(--color-borde);
     border-radius: 12px;
     font-size: 0.9rem;
+    backdrop-filter: blur(10px);
 }
 
 .estado-conexion__indicador {
@@ -671,13 +727,15 @@ svg {
     border-radius: 50%;
 }
 
-#estado-conexion[data-conectado="true"] .estado-conexion__indicador {
-    background: #22c55e;
-    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+#estado-conexion[data-conectado="true"]
+.estado-conexion__indicador {
+    background: #4ade80;
+    box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.15);
 }
 
-#estado-conexion[data-conectado="false"] .estado-conexion__indicador {
-    background: #f59e0b;
+#estado-conexion[data-conectado="false"]
+.estado-conexion__indicador {
+    background: #fbbf24;
 }
 
 .chat__panel {
@@ -686,10 +744,12 @@ svg {
     min-width: 0;
     min-height: 540px;
     overflow: hidden;
-    background: #ffffff;
+    background: rgba(31, 28, 44, 0.55);
     border: 1px solid var(--color-borde);
     border-radius: var(--radio-grande);
     box-shadow: var(--sombra-tarjeta);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
 }
 
 .chat__mensajes {
@@ -705,7 +765,7 @@ svg {
     overscroll-behavior: contain;
 }
 
-.mensaje {
+.chat__mensajes .mensaje {
     max-width: 85%;
     padding: 14px 16px;
     border-radius: 16px;
@@ -713,9 +773,9 @@ svg {
 
 .mensaje--asistente {
     align-self: flex-start;
-    color: #334155;
-    background: #f0f6fd;
-    border: 1px solid #e1ecf8;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--color-borde);
     border-bottom-left-radius: 5px;
 }
 
@@ -755,7 +815,7 @@ svg {
     flex-direction: column;
     gap: 18px;
     padding: 22px 24px;
-    background: #f8fbff;
+    background: rgba(255, 255, 255, 0.06);
     border-top: 1px solid var(--color-borde);
 }
 
@@ -785,8 +845,8 @@ svg {
 }
 
 #indicador-microfono[data-activo="true"] {
-    background: #22c55e;
-    box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.12);
+    background: #4ade80;
+    box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.15);
     animation: pulso-microfono 1.8s infinite;
 }
 
@@ -797,11 +857,11 @@ svg {
 @keyframes pulso-microfono {
     0%,
     100% {
-        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+        box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.15);
     }
 
     50% {
-        box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.04);
+        box-shadow: 0 0 0 8px rgba(74, 222, 128, 0.04);
     }
 }
 
@@ -854,7 +914,7 @@ svg {
 }
 
 /* =========================================
-   Indicadores de actividad
+   INDICADORES DE ACTIVIDAD
 ========================================= */
 
 .indicador-carga {
@@ -871,7 +931,7 @@ svg {
 .indicador-carga__puntos span {
     width: 6px;
     height: 6px;
-    background: var(--color-primario);
+    background: var(--color-secundario);
     border-radius: 50%;
     animation: punto-carga 1.2s infinite ease-in-out;
 }
@@ -899,7 +959,7 @@ svg {
 }
 
 /* =========================================
-   Pie de página
+   PIE DE PÁGINA
 ========================================= */
 
 .pie {
@@ -915,7 +975,89 @@ svg {
 }
 
 /* =========================================
-   Adaptación para tablets
+   PERFIL PERSONAL Y EDICIÓN
+========================================= */
+
+#seccion-perfil .panel__encabezado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+
+#seccion-perfil .panel__encabezado h2 {
+    margin: 0 0 6px;
+    color: #ffffff;
+    font-size: 1.2rem;
+    font-weight: 750;
+}
+
+#seccion-perfil .panel__encabezado p {
+    margin: 0;
+    color: var(--color-texto-secundario);
+    font-size: 0.92rem;
+}
+
+#editar-persona {
+    flex-shrink: 0;
+}
+
+#resumen-persona {
+    overflow-wrap: anywhere;
+}
+
+#resumen-persona .resumen-persona {
+    padding: 16px;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.35);
+    border-radius: var(--radio-medio);
+}
+
+#resumen-persona .resumen-persona p {
+    margin: 0 0 8px;
+    color: var(--color-texto-secundario);
+}
+
+#resumen-persona .resumen-persona p:last-child {
+    margin-bottom: 0;
+}
+
+/* =========================================
+   MARCA
+========================================= */
+
+.marca {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: #ffffff;
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.marca:hover {
+    text-decoration: none;
+}
+
+.marca__icono {
+    display: grid;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    color: #ffffff;
+    background: linear-gradient(
+        145deg,
+        var(--color-primario),
+        var(--color-secundario)
+    );
+    border-radius: 13px;
+}
+
+/* =========================================
+   ADAPTACIÓN PARA TABLETS
 ========================================= */
 
 @media (max-width: 800px) {
@@ -936,7 +1078,8 @@ svg {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .tarjeta {
+    .tarjeta,
+    .panel {
         padding: 22px;
     }
 
@@ -951,7 +1094,7 @@ svg {
 }
 
 /* =========================================
-   Adaptación para celulares
+   ADAPTACIÓN PARA CELULARES
 ========================================= */
 
 @media (max-width: 600px) {
@@ -998,7 +1141,8 @@ svg {
         align-items: flex-start;
     }
 
-    .tarjeta {
+    .tarjeta,
+    .panel {
         padding: 18px;
         border-radius: 17px;
     }
@@ -1041,7 +1185,7 @@ svg {
         gap: 13px;
     }
 
-    .mensaje {
+    .chat__mensajes .mensaje {
         max-width: 92%;
         padding: 12px 13px;
         font-size: 0.93rem;
@@ -1095,10 +1239,18 @@ svg {
         min-width: 39px;
         padding-inline: 8px;
     }
+
+    #seccion-perfil .panel__encabezado {
+        align-items: flex-start;
+    }
+
+    #editar-persona {
+        width: 100%;
+    }
 }
 
 /* =========================================
-   Celulares pequeños
+   CELULARES PEQUEÑOS
 ========================================= */
 
 @media (max-width: 360px) {
@@ -1106,7 +1258,8 @@ svg {
         width: calc(100% - 20px);
     }
 
-    .tarjeta {
+    .tarjeta,
+    .panel {
         padding: 15px;
     }
 
@@ -1139,7 +1292,7 @@ svg {
 }
 
 /* =========================================
-   Accesibilidad
+   ACCESIBILIDAD
 ========================================= */
 
 @media (prefers-reduced-motion: reduce) {
@@ -1150,134 +1303,5 @@ svg {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
-    }
-}
-
-
-/* =========================================
-   Perfil personal y edición
-========================================= */
-
-#seccion-perfil .panel__encabezado {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-bottom: 22px;
-}
-
-#seccion-perfil .panel__encabezado h2 {
-    margin: 0 0 6px;
-    font-size: 1.2rem;
-    font-weight: 750;
-}
-
-#seccion-perfil .panel__encabezado p {
-    margin: 0;
-    color: var(--color-texto-secundario);
-    font-size: 0.92rem;
-}
-
-#editar-persona {
-    flex-shrink: 0;
-}
-
-#resumen-persona {
-    overflow-wrap: anywhere;
-}
-
-#resumen-persona .resumen-persona {
-    padding: 16px;
-    background: var(--color-primario-claro);
-    border: 1px solid #c5e0fb;
-    border-radius: var(--radio-medio);
-}
-
-#resumen-persona .resumen-persona p {
-    margin: 0 0 8px;
-}
-
-#resumen-persona .resumen-persona p:last-child {
-    margin-bottom: 0;
-}
-
-/* Compatibilidad entre los nombres del HTML y el CSS */
-
-.boton--principal {
-    color: #ffffff;
-    background: var(--color-primario);
-    border-color: var(--color-primario);
-    box-shadow: 0 6px 15px rgba(24, 119, 201, 0.17);
-}
-
-.boton--principal:hover:not(:disabled) {
-    color: #ffffff;
-    background: var(--color-primario-oscuro);
-    border-color: var(--color-primario-oscuro);
-}
-
-.panel {
-    min-width: 0;
-    margin-bottom: 28px;
-    padding: 26px;
-    background: var(--color-superficie);
-    border: 1px solid var(--color-borde);
-    border-radius: var(--radio-grande);
-    box-shadow: var(--sombra-tarjeta);
-}
-
-.panel__encabezado {
-    margin-bottom: 22px;
-}
-
-.panel__encabezado h2 {
-    margin: 0 0 6px;
-}
-
-.panel__encabezado p {
-    margin: 0;
-    color: var(--color-texto-secundario);
-}
-
-.marca {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    color: var(--color-primario-oscuro);
-    font-size: 1.2rem;
-    font-weight: 800;
-}
-
-.marca:hover {
-    text-decoration: none;
-}
-
-.marca__icono {
-    display: grid;
-    flex: 0 0 42px;
-    width: 42px;
-    height: 42px;
-    place-items: center;
-    color: #ffffff;
-    background: linear-gradient(
-        145deg,
-        var(--color-primario),
-        var(--color-secundario)
-    );
-    border-radius: 13px;
-}
-
-@media (max-width: 600px) {
-    .panel {
-        padding: 18px;
-    }
-
-    #seccion-perfil .panel__encabezado {
-        align-items: flex-start;
-    }
-
-    #editar-persona {
-        width: 100%;
     }
 }

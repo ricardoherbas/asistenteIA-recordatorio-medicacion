@@ -1,4 +1,3 @@
-
 CREATE TABLE usuarios (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
@@ -98,6 +97,9 @@ CREATE TABLE alertas (
     intentos_envio INTEGER NOT NULL DEFAULT 0,
     creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    CONSTRAINT uq_alerta_registro_tipo
+        UNIQUE (registro_toma_id, tipo),
+
     CONSTRAINT chk_tipo_alerta
         CHECK (
             tipo IN (
@@ -108,9 +110,70 @@ CREATE TABLE alertas (
 
     CONSTRAINT chk_estado_alerta
         CHECK (
-            estado IN ('pendiente', 'enviada', 'cancelada', 'error')
+            estado IN (
+                'pendiente',
+                'enviada',
+                'cancelada',
+                'error'
+            )
         ),
 
     CONSTRAINT chk_intentos_envio
         CHECK (intentos_envio >= 0)
 );
+
+CREATE TABLE envios_alertas (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    alerta_id BIGINT NOT NULL
+        REFERENCES alertas(id) ON DELETE CASCADE,
+    canal VARCHAR(20) NOT NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+    intentos INTEGER NOT NULL DEFAULT 0,
+    enviado_en TIMESTAMPTZ,
+    ultimo_error TEXT,
+    proximo_intento_en TIMESTAMPTZ,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_alerta_canal
+        UNIQUE (alerta_id, canal),
+
+    CONSTRAINT chk_canal_envio
+        CHECK (
+            canal IN ('email', 'push')
+        ),
+
+    CONSTRAINT chk_estado_envio
+        CHECK (
+            estado IN (
+                'pendiente',
+                'enviado',
+                'error'
+            )
+        ),
+
+    CONSTRAINT chk_intentos_envio_alerta
+        CHECK (intentos >= 0)
+);
+
+CREATE TABLE tokens_dispositivos (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario_id BIGINT NOT NULL
+        REFERENCES usuarios(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE FUNCTION actualizar_fecha_modificacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.actualizado_en = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_actualizar_tokens_dispositivos
+BEFORE UPDATE ON tokens_dispositivos
+FOR EACH ROW
+EXECUTE FUNCTION actualizar_fecha_modificacion();

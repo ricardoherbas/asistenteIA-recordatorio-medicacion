@@ -7,6 +7,7 @@ const { registrarWebSocket } = require('./websocket/voice.websocket');
 const usuariosRoutes = require('./routes/usuarios.routes');
 const medicamentosRoutes = require('./routes/medicamentos.routes');
 const tomasRoutes = require('./routes/tomas.routes');
+const dispositivosRoutes = require('./routes/dispositivos.routes');
 
 const handError = require('./middlewares/hand-error');
 
@@ -40,6 +41,7 @@ class Server {
         this.app.use('/api/usuarios', usuariosRoutes);
         this.app.use('/api/medicamentos', medicamentosRoutes);
         this.app.use('/api/tomas', tomasRoutes);
+        this.app.use('/api/dispositivos', dispositivosRoutes);
 
         this.app.use((req, res) => {
             res.status(404).json({

@@ -70,13 +70,64 @@ const obtenerTomasPorUsuario = async (usuarioId, dias = 7) => {
           AND m.activo = TRUE
           AND h.activo = TRUE
           AND rt.fecha_programada >= CURRENT_DATE
-          AND rt.fecha_programada <= CURRENT_DATE + $2
+          AND rt.fecha_programada <= CURRENT_DATE + ($2::integer)
         ORDER BY
             rt.fecha_programada ASC,
             rt.hora_programada ASC;
     `;
 
     const resultado = await pool.query(consulta, [usuarioId, dias]);
+
+    return resultado.rows;
+};
+
+const obtenerTomasPendientesPorUsuario = async (usuarioId) => {
+    const consulta = `
+        SELECT
+            rt.id,
+            rt.horario_id,
+            rt.fecha_programada,
+            rt.hora_programada,
+            rt.estado,
+            m.id AS medicamento_id,
+            m.nombre AS medicamento,
+            m.dosis
+        FROM registro_tomas AS rt
+        INNER JOIN horarios_medicacion AS h
+            ON h.id = rt.horario_id
+        INNER JOIN medicamentos AS m
+            ON m.id = h.medicamento_id
+        WHERE m.usuario_id = $1
+          AND m.activo = TRUE
+          AND h.activo = TRUE
+          AND rt.estado = 'pendiente'
+          AND rt.fecha_programada <= CURRENT_DATE
+        ORDER BY
+            rt.fecha_programada ASC,
+            rt.hora_programada ASC;
+    `;
+
+    const resultado = await pool.query(consulta, [usuarioId]);
+
+    return resultado.rows;
+};
+
+const obtenerMedicamentosPorUsuario = async (usuarioId) => {
+    const consulta = `
+        SELECT
+            id,
+            nombre,
+            dosis,
+            instrucciones,
+            activo,
+            creado_en
+        FROM medicamentos
+        WHERE usuario_id = $1
+          AND activo = TRUE
+        ORDER BY nombre ASC;
+    `;
+
+    const resultado = await pool.query(consulta, [usuarioId]);
 
     return resultado.rows;
 };
@@ -156,6 +207,8 @@ const marcarTomaSinConfirmacion = async (tomaId, usuarioId) => {
 module.exports = {
     generarTomasParaHorario,
     obtenerTomasPorUsuario,
+    obtenerTomasPendientesPorUsuario,
+    obtenerMedicamentosPorUsuario,
     confirmarToma,
     marcarTomaSinConfirmacion
 };

@@ -14,6 +14,7 @@
 accion(confirmar_toma, registrar_confirmacion).
 accion(no_tome, mantener_pendiente).
 accion(consultar_horario, consultar_recordatorio).
+accion(consultar_medicamentos, consultar_medicamentos).
 accion(rechazar_recordatorio, solicitar_aclaracion).
 accion(respuesta_ambigua, pedir_aclaracion).
 accion(sin_respuesta, evaluar_seguimiento).

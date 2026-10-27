@@ -23,6 +23,26 @@ services:
       - ./backend/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     expose:
       - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: asistente_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "127.0.0.1:5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
 
   ollama:
     image: ollama/ollama:latest
@@ -41,7 +61,7 @@ services:
       - "10300"
     command:
       - "--model"
-      - "tiny-int8"
+      - "small-int8"
       - "--language"
       - "es"
       - "--uri"
@@ -97,6 +117,24 @@ services:
       - tts-piper
       - prolog
 
+  motor-recordatorios:
+    build:
+      context: ./motor-recordatorios
+      dockerfile: Dockerfile
+    container_name: memoric_motor
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      FIREBASE_CREDENTIALS_PATH: /run/secrets/firebase-credentials.json
+    volumes:
+      - ./backend/config/firebase-credentials.json:/run/secrets/firebase-credentials.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  pgadmin_data:
   ollama_data:
