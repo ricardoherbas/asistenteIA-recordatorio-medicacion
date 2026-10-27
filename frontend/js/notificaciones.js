@@ -1,5 +1,5 @@
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {
     getMessaging,
     getToken,
@@ -8,6 +8,8 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js';
 
 import { firebaseConfig, vapidKey } from './firebase-config.js';
+
+console.log('Notificaciones.js cargado correctamente');
 
 const CLAVE_PERSONA = 'personaAsistenteMedicacion';
 
@@ -18,9 +20,12 @@ const elementos = {
 };
 
 let messaging = null;
+let promesaFirebase = null;
 let activando = false;
 
 function mostrarMensaje(texto, tipo = 'exito') {
+    if (!elementos.mensaje) return;
+
     elementos.mensaje.textContent = texto;
     elementos.mensaje.hidden = !texto;
 
@@ -54,42 +59,83 @@ function obtenerUsuarioId() {
 }
 
 function actualizarSeccion() {
+    if (!elementos.seccion) return;
+
     elementos.seccion.hidden = !obtenerUsuarioId();
 }
 
 async function inicializarFirebase() {
-    const compatible = await isSupported();
+    if (messaging) return messaging;
 
-    if (!compatible) {
-        throw new Error(
-            'Este navegador no admite notificaciones push de Firebase.'
-        );
-    }
+    if (promesaFirebase) return promesaFirebase;
 
-    const app = initializeApp(firebaseConfig);
-    messaging = getMessaging(app);
+    promesaFirebase = (async () => {
+        const compatible = await isSupported();
 
-    onMessage(messaging, (payload) => {
-        const titulo = payload.notification?.title ||
-            'Memoric - Recordatorio de medicación';
-
-        const mensaje = payload.notification?.body ||
-            'Tenés un recordatorio de medicación.';
-
-        mostrarMensaje(`${titulo}: ${mensaje}`);
-
-        if (Notification.permission === 'granted') {
-            navigator.serviceWorker.ready.then((registro) => {
-                registro.showNotification(titulo, {
-                    body: mensaje,
-                    icon: '/favicon.ico',
-                    data: {
-                        url: '/index.html'
-                    }
-                });
-            }).catch(console.error);
+        if (!compatible) {
+            throw new Error(
+                'Este navegador no admite notificaciones push de Firebase.'
+            );
         }
-    });
+
+        const app = getApps().length
+            ? getApp()
+            : initializeApp(firebaseConfig);
+
+        const instancia = getMessaging(app);
+
+        onMessage(instancia, (payload) => {
+            console.log(
+                '[MEMORIC PUSH] Mensaje recibido:',
+                payload
+            );
+
+            const titulo =
+                payload.notification?.title ||
+                payload.data?.title ||
+                'Memoric - Recordatorio de medicación';
+
+            const mensaje =
+                payload.notification?.body ||
+                payload.data?.body ||
+                'Tenés un recordatorio de medicación.';
+
+            mostrarMensaje(`${titulo}: ${mensaje}`);
+
+            if (Notification.permission === 'granted') {
+                navigator.serviceWorker.ready
+                    .then((registro) => {
+                        return registro.showNotification(titulo, {
+                            body: mensaje,
+                            data: {
+                                url: '/index.html'
+                            }
+                        });
+                    })
+                    .catch((error) => {
+                        console.error(
+                            '[MEMORIC PUSH] Error al mostrar notificación:',
+                            error
+                        );
+                    });
+            }
+        });
+
+        messaging = instancia;
+
+        console.log(
+            '[MEMORIC PUSH] Listener de Firebase inicializado.'
+        );
+
+        return messaging;
+    })();
+
+    try {
+        return await promesaFirebase;
+    } catch (error) {
+        promesaFirebase = null;
+        throw error;
+    }
 }
 
 async function registrarToken(token, usuarioId) {
@@ -105,6 +151,86 @@ async function registrarToken(token, usuarioId) {
         throw new Error(
             respuesta?.mensaje ||
             'No se pudo registrar el dispositivo.'
+        );
+    }
+}
+
+async function activarPush(usuarioId) {
+    if (!window.isSecureContext) {
+        throw new Error(
+            'Las notificaciones push requieren HTTPS o localhost.'
+        );
+    }
+
+    if (!('Notification' in window)) {
+        throw new Error(
+            'Este navegador no admite notificaciones.'
+        );
+    }
+
+    if (!('serviceWorker' in navigator)) {
+        throw new Error(
+            'Este navegador no admite service workers.'
+        );
+    }
+
+    const firebaseMessaging = await inicializarFirebase();
+
+    const permiso = await Notification.requestPermission();
+
+    if (permiso !== 'granted') {
+        throw new Error(
+            'No se otorgó permiso para recibir notificaciones push.'
+        );
+    }
+
+    const registro = await navigator.serviceWorker.register(
+        '/firebase-messaging-sw.js'
+    );
+
+    const token = await getToken(firebaseMessaging, {
+        vapidKey,
+        serviceWorkerRegistration: registro
+    });
+
+    if (!token) {
+        throw new Error(
+            'Firebase no devolvió un token para este navegador.'
+        );
+    }
+
+    await registrarToken(token, usuarioId);
+
+    console.log(
+        '[MEMORIC PUSH] Token registrado correctamente.'
+    );
+
+    return true;
+}
+
+async function restaurarPush() {
+    if (!obtenerUsuarioId()) return;
+
+    if (!window.isSecureContext) return;
+
+    if (!('Notification' in window)) return;
+
+    if (!('serviceWorker' in navigator)) return;
+
+    // No solicitamos permisos automáticamente.
+    // Solo restauramos Push si el usuario ya los concedió.
+    if (Notification.permission !== 'granted') return;
+
+    try {
+        await activarPush(obtenerUsuarioId());
+
+        console.log(
+            '[MEMORIC PUSH] Notificaciones restauradas automáticamente.'
+        );
+    } catch (error) {
+        console.error(
+            '[MEMORIC PUSH] No se pudo restaurar Push:',
+            error
         );
     }
 }
@@ -126,61 +252,75 @@ async function activarNotificaciones() {
     elementos.boton.disabled = true;
     mostrarMensaje('');
 
+    // Conservamos la activación de voz desde el clic.
+    const activacionVoz = window.MEMORIC_VOZ
+        ? window.MEMORIC_VOZ.activarAudio()
+        : Promise.reject(
+            new Error('No se encontró el módulo de avisos por voz.')
+        );
+
+    const activacionPush = activarPush(usuarioId);
+
     try {
-        if (!window.isSecureContext) {
-            throw new Error(
-                'Las notificaciones requieren HTTPS o localhost.'
+        const resultados = await Promise.allSettled([
+            activacionVoz,
+            activacionPush
+        ]);
+
+        const vozActivada = resultados[0].status === 'fulfilled';
+        const pushActivada = resultados[1].status === 'fulfilled';
+
+        if (vozActivada && pushActivada) {
+            mostrarMensaje(
+                'Notificaciones push y audio habilitados correctamente.'
             );
-        }
 
-        if (!('Notification' in window)) {
-            throw new Error(
-                'Este navegador no admite notificaciones.'
+            elementos.boton.textContent = 'Notificaciones activadas';
+        } else if (vozActivada) {
+            const errorPush = resultados[1].reason;
+
+            mostrarMensaje(
+                'Audio habilitado. No se pudieron activar las notificaciones push: ' +
+                (errorPush?.message || 'Error desconocido.'),
+                'error'
             );
-        }
 
-        if (!('serviceWorker' in navigator)) {
-            throw new Error(
-                'Este navegador no admite service workers.'
+            elementos.boton.textContent = 'Reintentar notificaciones';
+        } else if (pushActivada) {
+            const errorVoz = resultados[0].reason;
+
+            mostrarMensaje(
+                'Notificaciones push activadas. No se pudo habilitar el audio: ' +
+                (errorVoz?.message || 'Error desconocido.'),
+                'error'
             );
-        }
 
-        if (!messaging) {
-            await inicializarFirebase();
-        }
+            elementos.boton.textContent = 'Reintentar notificaciones';
+        } else {
+            const errorPush = resultados[1].reason;
+            const errorVoz = resultados[0].reason;
 
-        const permiso = await Notification.requestPermission();
-
-        if (permiso !== 'granted') {
-            throw new Error(
-                'No se otorgó permiso para recibir notificaciones.'
+            mostrarMensaje(
+                'No se pudieron habilitar los avisos. ' +
+                'Push: ' +
+                (errorPush?.message || 'Error desconocido.') +
+                '. Audio: ' +
+                (errorVoz?.message || 'Error desconocido.'),
+                'error'
             );
+
+            elementos.boton.textContent = 'Reintentar notificaciones';
         }
 
-        const registro = await navigator.serviceWorker.register(
-            '/firebase-messaging-sw.js'
-        );
-
-        const token = await getToken(messaging, {
-            vapidKey,
-            serviceWorkerRegistration: registro
+        console.log('[NOTIFICACIONES] Resultado:', {
+            vozActivada,
+            pushActivada
         });
-
-        if (!token) {
-            throw new Error(
-                'Firebase no devolvió un token para este navegador.'
-            );
-        }
-
-        await registrarToken(token, usuarioId);
-
-        mostrarMensaje(
-            'Notificaciones activadas correctamente en este dispositivo.'
-        );
-
-        elementos.boton.textContent = 'Notificaciones activadas';
     } catch (error) {
-        console.error('Error al activar notificaciones:', error);
+        console.error(
+            'Error al activar notificaciones:',
+            error
+        );
 
         mostrarMensaje(
             error.message ||
@@ -193,8 +333,12 @@ async function activarNotificaciones() {
     }
 }
 
-async function inicializar() {
-    if (!elementos.seccion || !elementos.boton || !elementos.mensaje) {
+function inicializar() {
+    if (
+        !elementos.seccion ||
+        !elementos.boton ||
+        !elementos.mensaje
+    ) {
         return;
     }
 
@@ -205,18 +349,38 @@ async function inicializar() {
         activarNotificaciones
     );
 
-    window.addEventListener('storage', actualizarSeccion);
+    window.addEventListener(
+        'storage',
+        () => {
+            actualizarSeccion();
+            restaurarPush();
+        }
+    );
 
     document.getElementById('form-persona')?.addEventListener(
         'submit',
         () => {
-            setTimeout(actualizarSeccion, 500);
+            setTimeout(() => {
+                actualizarSeccion();
+                restaurarPush();
+            }, 500);
         }
     );
 
-    if (Notification.permission === 'granted') {
+    if (window.MEMORIC_VOZ?.estaActivado()) {
         elementos.boton.textContent = 'Activar notificaciones';
     }
+
+    // Inicializar el listener sin esperar al botón.
+    inicializarFirebase().catch((error) => {
+        console.error(
+            '[MEMORIC PUSH] Error al inicializar Firebase:',
+            error
+        );
+    });
+
+    // Recuperar el token si el usuario ya dio permiso.
+    restaurarPush();
 }
 
 inicializar();

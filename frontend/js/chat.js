@@ -1,3 +1,4 @@
+
 (() => {
     'use strict';
 
@@ -55,6 +56,10 @@
     let saludoFinalizadoServidor = false;
     let saludoCompletado = false;
     let iniciandoMicrofonoAutomatico = false;
+
+    // Control de recordatorios de medicación.
+    let recordatorioEnRecepcion = false;
+    let recordatoriosPendientes = 0;
 
     function mostrarError(mensaje) {
         elementos.mensajeError.textContent = mensaje;
@@ -225,6 +230,7 @@
             esperandoRespuesta = false;
             respuestaFinalizada = true;
             saludoEnCurso = false;
+            recordatorioEnRecepcion = false;
             ocultarActividad();
 
             if (microfonoActivo) {
@@ -249,15 +255,27 @@
 
     function gestionarMensajeServidor(evento) {
         if (typeof evento.data !== 'string') {
+            const esRecordatorio = recordatorioEnRecepcion;
+
             audiosPendientesDecodificacion++;
 
             cadenaDecodificacion = cadenaDecodificacion
-                .then(() => reproducirAudioRecibido(evento.data))
+                .then(() => reproducirAudioRecibido(
+                    evento.data,
+                    esRecordatorio
+                ))
                 .catch((error) => {
                     console.error(
                         'Error al procesar el audio recibido:',
                         error
                     );
+
+                    if (esRecordatorio) {
+                        recordatoriosPendientes = Math.max(
+                            0,
+                            recordatoriosPendientes - 1
+                        );
+                    }
 
                     mostrarError('No se pudo procesar el audio recibido.');
                 })
@@ -276,6 +294,42 @@
             mensaje = JSON.parse(evento.data);
         } catch {
             agregarMensaje('asistente', evento.data);
+            return;
+        }
+
+        // Inicio de un recordatorio de medicación.
+        if (mensaje.tipo === 'recordatorio_voz') {
+            console.log(
+                '[MEMORIC VOZ] Recordatorio recibido:',
+                mensaje
+            );
+
+            recordatorioEnRecepcion = true;
+            recordatoriosPendientes++;
+
+            reiniciarSegmentoVoz();
+
+            agregarMensaje(
+                'asistente',
+                `Recordatorio de medicación: ${mensaje.texto || ''}`
+            );
+
+            mostrarActividad(
+                'Reproduciendo recordatorio de medicación...'
+            );
+
+            return;
+        }
+
+        // Finalización de la transmisión del recordatorio.
+        if (mensaje.tipo === 'fin_recordatorio_voz') {
+            recordatorioEnRecepcion = false;
+
+            console.log(
+                '[MEMORIC VOZ] Fin de transmisión:',
+                mensaje.envioId
+            );
+
             return;
         }
 
@@ -369,12 +423,19 @@
         return contextoAudio;
     }
 
-    async function reproducirAudioRecibido(datos) {
+    async function reproducirAudioRecibido(
+        datos,
+        esRecordatorio = false
+    ) {
         const contexto = await obtenerAudioContexto();
         const copia = datos.slice(0);
         const buffer = await contexto.decodeAudioData(copia);
 
-        colaAudio.push(buffer);
+        colaAudio.push({
+            buffer,
+            esRecordatorio
+        });
+
         reproducirSiguienteAudio();
     }
 
@@ -391,23 +452,71 @@
 
         reproduciendoAudio = true;
 
-        const buffer = colaAudio.shift();
+        const siguiente = colaAudio.shift();
         const fuente = contextoAudio.createBufferSource();
 
         fuenteAudioActual = fuente;
-        fuente.buffer = buffer;
+        fuente.buffer = siguiente.buffer;
         fuente.connect(contextoAudio.destination);
 
         fuente.addEventListener('ended', () => {
             fuenteAudioActual = null;
             reproduciendoAudio = false;
 
+            if (siguiente.esRecordatorio) {
+                recordatoriosPendientes = Math.max(
+                    0,
+                    recordatoriosPendientes - 1
+                );
+
+                console.log(
+                    '[MEMORIC VOZ] Recordatorio reproducido.'
+                );
+
+                reiniciarSegmentoVoz();
+            }
+
             reproducirSiguienteAudio();
             comprobarFinSaludo();
             comprobarFinConsulta();
+
+            if (
+                recordatoriosPendientes === 0 &&
+                !reproduciendoAudio &&
+                colaAudio.length === 0 &&
+                !consultaEnCurso &&
+                !saludoEnCurso
+            ) {
+                ocultarActividad();
+
+                if (microfonoActivo) {
+                    mostrarActividad(
+                        'Micrófono activo. Podés hablar cuando quieras.'
+                    );
+                }
+            }
         }, { once: true });
 
-        fuente.start();
+        try {
+            fuente.start();
+        } catch (error) {
+            console.error(
+                'Error al iniciar reproducción:',
+                error
+            );
+
+            fuenteAudioActual = null;
+            reproduciendoAudio = false;
+
+            if (siguiente.esRecordatorio) {
+                recordatoriosPendientes = Math.max(
+                    0,
+                    recordatoriosPendientes - 1
+                );
+            }
+
+            reproducirSiguienteAudio();
+        }
     }
 
     /* =========================================
@@ -422,6 +531,8 @@
             reproduciendoAudio ||
             colaAudio.length > 0 ||
             iniciandoMicrofonoAutomatico ||
+            recordatorioEnRecepcion ||
+            recordatoriosPendientes > 0 ||
             saludoCompletado
         ) {
             return;
@@ -462,7 +573,9 @@
             !respuestaFinalizada ||
             reproduciendoAudio ||
             colaAudio.length > 0 ||
-            audiosPendientesDecodificacion > 0
+            audiosPendientesDecodificacion > 0 ||
+            recordatorioEnRecepcion ||
+            recordatoriosPendientes > 0
         ) {
             return;
         }
@@ -539,7 +652,11 @@
         if (
             !microfonoActivo ||
             saludoEnCurso ||
-            consultaEnCurso
+            consultaEnCurso ||
+            recordatorioEnRecepcion ||
+            recordatoriosPendientes > 0 ||
+            reproduciendoAudio ||
+            audiosPendientesDecodificacion > 0
         ) {
             return;
         }

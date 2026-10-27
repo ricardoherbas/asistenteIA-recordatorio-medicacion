@@ -35,7 +35,8 @@ async function crearCanalesEnvio(alertaId) {
         )
         VALUES
             ($1, 'email'),
-            ($1, 'push')
+            ($1, 'push'),
+            ($1, 'voz')
         ON CONFLICT (alerta_id, canal)
         DO NOTHING
     `, [alertaId]);

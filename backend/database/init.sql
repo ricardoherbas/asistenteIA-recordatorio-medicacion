@@ -139,7 +139,7 @@ CREATE TABLE envios_alertas (
 
     CONSTRAINT chk_canal_envio
         CHECK (
-            canal IN ('email', 'push')
+            canal IN ('email', 'push', 'voz' )
         ),
 
     CONSTRAINT chk_estado_envio

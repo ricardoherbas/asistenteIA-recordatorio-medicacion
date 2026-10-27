@@ -8,41 +8,54 @@ importScripts(
 );
 
 const firebaseConfig = {
-    apiKey: 'TU_API_KEY',
-    authDomain: 'TU_AUTH_DOMAIN',
-    projectId: 'TU_PROJECT_ID',
-    storageBucket: 'TU_STORAGE_BUCKET',
-    messagingSenderId: 'TU_MESSAGING_SENDER_ID',
-    appId: 'TU_APP_ID'
+    apiKey: 'AIzaSyABePfAYG4-mzbtiAbhjpNKtNr7FwV9vU0',
+    authDomain: 'asistenteia-recmedicacion.firebaseapp.com',
+    projectId: 'asistenteia-recmedicacion',
+    storageBucket: 'asistenteia-recmedicacion.firebasestorage.app',
+    messagingSenderId: '13628763678',
+    appId: '1:13628763678:web:316a9708f7638f575e880f',
+    measurementId: 'G-3HHE66356D'
 };
 
 firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
+console.log('[MEMORIC PUSH] Service Worker de Firebase inicializado.');
+
 messaging.onBackgroundMessage((payload) => {
-    console.log('Notificación recibida en segundo plano:', payload);
+    console.log(
+        '[MEMORIC PUSH] Notificación recibida en segundo plano:',
+        payload
+    );
 
     // Firebase muestra automáticamente las notificaciones
     // que incluyen el campo notification.
     // Evitamos mostrarlas dos veces.
     if (payload.notification) {
+        console.log(
+            '[MEMORIC PUSH] Notificación gestionada por Firebase.'
+        );
         return;
     }
 
+    // Para mensajes que contienen únicamente datos,
+    // mostramos la notificación manualmente.
     const titulo = payload.data?.title ||
         'Memoric - Recordatorio de medicación';
 
     const opciones = {
         body: payload.data?.body ||
             'Es hora de tomar tu medicamento.',
-        icon: '/favicon.ico',
+        tag: payload.data?.envioId
+            ? `memoric-${payload.data.envioId}`
+            : 'memoric-recordatorio',
         data: {
             url: '/index.html'
         }
     };
 
-    self.registration.showNotification(titulo, opciones);
+    return self.registration.showNotification(titulo, opciones);
 });
 
 self.addEventListener('notificationclick', (evento) => {

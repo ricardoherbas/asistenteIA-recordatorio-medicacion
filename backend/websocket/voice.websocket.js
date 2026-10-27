@@ -1,3 +1,4 @@
+
 const WebSocket = require('ws');
 const { transcribirConWhisper } = require('../services/whisper.service');
 const { analizarIntencion } = require('../services/intencion.service');
@@ -12,6 +13,196 @@ const registrarWebSocket = (servidor) => {
         path: '/ws'
     });
 
+    const conexionesUsuarios = new Map();
+
+    const usuarioValido = (valor) => {
+        const id = Number(valor);
+        return Number.isSafeInteger(id) && id > 0;
+    };
+
+    const enviarJSON = (ws, mensaje) => {
+        if (ws.readyState !== WebSocket.OPEN) {
+            return false;
+        }
+
+        ws.send(JSON.stringify(mensaje), (error) => {
+            if (error) {
+                console.error('[WS] Error enviando JSON:', error.message);
+            }
+        });
+
+        return true;
+    };
+
+    const enviarBinario = (ws, audio) => {
+        return new Promise((resolve, reject) => {
+            if (ws.readyState !== WebSocket.OPEN) {
+                reject(new Error('La conexión WebSocket está cerrada.'));
+                return;
+            }
+
+            ws.send(audio, { binary: true }, (error) => {
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    };
+
+    const registrarConexionUsuario = (usuarioId, ws) => {
+        if (!conexionesUsuarios.has(usuarioId)) {
+            conexionesUsuarios.set(usuarioId, new Set());
+        }
+
+        conexionesUsuarios.get(usuarioId).add(ws);
+    };
+
+    const quitarConexionUsuario = (usuarioId, ws) => {
+        if (!usuarioId) return;
+
+        const conexiones = conexionesUsuarios.get(usuarioId);
+
+        if (!conexiones) return;
+
+        conexiones.delete(ws);
+
+        if (conexiones.size === 0) {
+            conexionesUsuarios.delete(usuarioId);
+        }
+    };
+
+    /*
+     * ENVÍO AUTOMÁTICO DE RECORDATORIOS
+     *
+     * El motor de recordatorios llamará a esta función
+     * mediante el backend.
+     *
+     * Para este prototipo se utiliza el usuarioId
+     * proporcionado por el frontend.
+     */
+    const enviarRecordatorioVoz = async (usuarioId, mensaje, envioId) => {
+        const id = Number(usuarioId);
+        const identificadorEnvio = Number(envioId);
+
+        if (!usuarioValido(id)) {
+            throw new Error('El usuario del recordatorio no es válido.');
+        }
+
+        if (typeof mensaje !== 'string' || !mensaje.trim()) {
+            throw new Error('El mensaje del recordatorio no es válido.');
+        }
+
+        if (
+            !Number.isSafeInteger(identificadorEnvio) ||
+            identificadorEnvio <= 0
+        ) {
+            throw new Error('El identificador del envío no es válido.');
+        }
+
+        const conexiones = conexionesUsuarios.get(id);
+
+        if (!conexiones || conexiones.size === 0) {
+            console.log(
+                '[RECORDATORIO] Usuario desconectado:',
+                id
+            );
+
+            return {
+                ok: false,
+                motivo: 'usuario_desconectado'
+            };
+        }
+
+        const conexionesDisponibles = [...conexiones].filter((ws) => {
+            return (
+                ws.readyState === WebSocket.OPEN &&
+                ws.avisosVozActivos === true
+            );
+        });
+
+        if (conexionesDisponibles.length === 0) {
+            return {
+                ok: false,
+                motivo: 'avisos_voz_no_disponibles'
+            };
+        }
+
+        // Priorizar chat.html; utilizar index.html como alternativa.
+        // Enviar a una sola conexión para evitar audio duplicado.
+        const ws = conexionesDisponibles.find(
+            (conexion) => conexion.modoConexion === 'asistente'
+        ) || conexionesDisponibles.find(
+            (conexion) => conexion.modoConexion === 'recordatorios'
+        );
+
+        if (!ws) {
+            return {
+                ok: false,
+                motivo: 'avisos_voz_no_disponibles'
+            };
+        }
+
+        console.log(
+            '[RECORDATORIO] Conexión seleccionada:',
+            ws.modoConexion
+        );
+
+        try {
+            console.log(
+                '[RECORDATORIO] Generando audio con Piper:',
+                mensaje
+            );
+
+            const audio = await sintetizarConPiper(
+                mensaje.trim()
+            );
+
+            if (ws.readyState !== WebSocket.OPEN) {
+                return {
+                    ok: false,
+                    motivo: 'usuario_desconectado'
+                };
+            }
+
+            enviarJSON(ws, {
+                tipo: 'recordatorio_voz',
+                envioId: identificadorEnvio,
+                texto: mensaje.trim()
+            });
+
+            await enviarBinario(ws, audio);
+
+            enviarJSON(ws, {
+                tipo: 'fin_recordatorio_voz',
+                envioId: identificadorEnvio
+            });
+
+            console.log(
+                '[RECORDATORIO] Audio enviado correctamente:',
+                identificadorEnvio
+            );
+
+            return {
+                ok: true,
+                envioId: identificadorEnvio
+            };
+        } catch (error) {
+            console.error(
+                '[RECORDATORIO] Error enviando audio:',
+                error
+            );
+
+            return {
+                ok: false,
+                motivo: 'error_envio'
+            };
+        }
+    };
+
+    wss.enviarRecordatorioVoz = enviarRecordatorioVoz;
+
     wss.on('connection', (ws) => {
         console.log('[WS] Cliente conectado al WebSocket.');
 
@@ -20,38 +211,99 @@ const registrarWebSocket = (servidor) => {
         let saludoSolicitado = false;
         let usuarioIdActual = null;
         let nombreUsuarioActual = '';
+        let modoConexion = null;
 
-        const enviarJSON = (mensaje) => {
-            if (ws.readyState !== WebSocket.OPEN) {
-                console.warn('[WS] No se pudo enviar JSON: conexión cerrada.');
-                return false;
-            }
+        ws.avisosVozActivos = false;
+        ws.modoConexion = null;
 
-            ws.send(JSON.stringify(mensaje), (error) => {
-                if (error) {
-                    console.error('[WS] Error enviando JSON:', error.message);
-                }
-            });
-
-            return true;
+        const responder = (mensaje) => {
+            return enviarJSON(ws, mensaje);
         };
 
         const cancelarActual = () => {
             if (!controladorActual) return;
 
-            console.log('[WS] Cancelando la operación anterior.');
+            console.log('[WS] Cancelando operación anterior.');
+
             controladorActual.abort();
             controladorActual = null;
         };
 
-        const solicitudVigente = (id, signal) =>
-            !signal.aborted &&
-            id === requestId &&
-            ws.readyState === WebSocket.OPEN;
+        const solicitudVigente = (id, signal) => {
+            return (
+                !signal.aborted &&
+                id === requestId &&
+                ws.readyState === WebSocket.OPEN
+            );
+        };
 
+        const seleccionarUsuario = (id, nombre) => {
+            if (
+                usuarioIdActual !== null &&
+                usuarioIdActual !== id
+            ) {
+                requestId++;
+                cancelarActual();
+
+                quitarConexionUsuario(usuarioIdActual, ws);
+
+                saludoSolicitado = false;
+                ws.avisosVozActivos = false;
+            }
+
+            usuarioIdActual = id;
+            nombreUsuarioActual = nombre;
+
+            registrarConexionUsuario(id, ws);
+        };
+
+        /*
+         * REGISTRO DE RECORDATORIOS
+         *
+         * Se utiliza desde index.html.
+         * No inicia el asistente ni genera un saludo.
+         */
+        const registrarRecordatorios = (mensaje) => {
+            const id = Number(mensaje.usuarioId);
+
+            if (!usuarioValido(id)) {
+                responder({
+                    tipo: 'error',
+                    mensaje: 'El usuario indicado no es válido.'
+                });
+
+                return;
+            }
+
+            seleccionarUsuario(id, '');
+
+            ws.avisosVozActivos = true;
+
+            if (modoConexion !== 'asistente') {
+                modoConexion = 'recordatorios';
+                ws.modoConexion = 'recordatorios';
+            }
+
+            responder({
+                tipo: 'recordatorios_registrados',
+                mensaje: 'Conexión habilitada para recibir recordatorios.'
+            });
+
+            console.log(
+                '[RECORDATORIO] Usuario registrado:',
+                id
+            );
+        };
+
+        /*
+         * SALUDO INICIAL DEL ASISTENTE
+         */
         const procesarSaludo = async () => {
             if (saludoSolicitado) {
-                console.log('[SALUDO] El saludo ya fue solicitado.');
+                console.log(
+                    '[SALUDO] El saludo ya fue solicitado.'
+                );
+
                 return;
             }
 
@@ -76,7 +328,9 @@ const registrarWebSocket = (servidor) => {
             const textoParaVoz = texto.replace('😊', '');
 
             try {
-                console.log('[SALUDO] Solicitando síntesis a Piper.');
+                console.log(
+                    '[SALUDO] Solicitando síntesis a Piper.'
+                );
 
                 const audio = await sintetizarConPiper(
                     textoParaVoz,
@@ -84,35 +338,27 @@ const registrarWebSocket = (servidor) => {
                 );
 
                 if (!solicitudVigente(id, signal)) {
-                    console.log('[SALUDO] Solicitud cancelada.');
                     return;
                 }
 
-                console.log('[SALUDO] Audio generado correctamente.');
-
-                enviarJSON({
+                responder({
                     tipo: 'saludo',
                     texto
                 });
 
-                if (!solicitudVigente(id, signal)) return;
+                await enviarBinario(ws, audio);
 
-                ws.send(audio, { binary: true }, (error) => {
-                    if (error) {
-                        console.error(
-                            '[SALUDO] Error enviando audio:',
-                            error.message
-                        );
-                    } else {
-                        console.log('[SALUDO] Audio enviado al cliente.');
-                    }
-                });
+                if (!solicitudVigente(id, signal)) {
+                    return;
+                }
 
-                enviarJSON({
+                responder({
                     tipo: 'fin_saludo'
                 });
 
-                console.log('[SALUDO] Saludo inicial procesado.');
+                console.log(
+                    '[SALUDO] Saludo inicial procesado.'
+                );
             } catch (error) {
                 if (
                     signal.aborted ||
@@ -122,9 +368,12 @@ const registrarWebSocket = (servidor) => {
                     return;
                 }
 
-                console.error('[SALUDO] Error generando saludo:', error);
+                console.error(
+                    '[SALUDO] Error generando saludo:',
+                    error
+                );
 
-                enviarJSON({
+                responder({
                     tipo: 'error',
                     mensaje: 'No se pudo generar el saludo inicial.'
                 });
@@ -135,20 +384,35 @@ const registrarWebSocket = (servidor) => {
             }
         };
 
-        const procesarAudio = async (audioBuffer, id, controller) => {
+        /*
+         * PIPELINE DE VOZ
+         *
+         * Whisper -> Intención -> Prolog ->
+         * Acción -> Gemma -> Piper
+         */
+        const procesarAudio = async (
+            audioBuffer,
+            id,
+            controller
+        ) => {
             const signal = controller.signal;
             const vigente = () => solicitudVigente(id, signal);
 
             try {
-                console.log('\n========== PIPELINE DE VOZ ==========');
+                console.log(
+                    '\n========== PIPELINE DE VOZ =========='
+                );
+
                 console.log('[VOZ] Solicitud:', id);
                 console.log('[VOZ] Usuario ID:', usuarioIdActual);
-                console.log('[VOZ] Audio recibido:', audioBuffer.length, 'bytes');
+                console.log(
+                    '[VOZ] Audio recibido:',
+                    audioBuffer.length,
+                    'bytes'
+                );
 
                 if (!usuarioIdActual) {
-                    console.error('[VOZ] No hay un usuario seleccionado.');
-
-                    enviarJSON({
+                    responder({
                         tipo: 'error',
                         mensaje: 'Primero tenés que iniciar el asistente con tu perfil.'
                     });
@@ -157,7 +421,9 @@ const registrarWebSocket = (servidor) => {
                 }
 
                 // 1. TRANSCRIPCIÓN CON WHISPER
-                console.log('[WHISPER] Enviando audio para transcripción...');
+                console.log(
+                    '[WHISPER] Enviando audio para transcripción...'
+                );
 
                 const transcripcion = await transcribirConWhisper(
                     audioBuffer,
@@ -165,24 +431,24 @@ const registrarWebSocket = (servidor) => {
                 );
 
                 if (!vigente()) {
-                    console.log('[VOZ] Solicitud cancelada después de Whisper.');
                     return;
                 }
 
-                console.log('[WHISPER] Transcripción recibida:', transcripcion);
-
                 if (typeof transcripcion !== 'string') {
-                    throw new Error('Whisper devolvió una transcripción inválida.');
+                    throw new Error(
+                        'Whisper devolvió una transcripción inválida.'
+                    );
                 }
 
                 const textoUsuario = transcripcion.trim();
 
-                console.log('[WHISPER] Texto final:', JSON.stringify(textoUsuario));
+                console.log(
+                    '[WHISPER] Texto reconocido:',
+                    textoUsuario
+                );
 
                 if (!textoUsuario) {
-                    console.warn('[WHISPER] La transcripción está vacía.');
-
-                    enviarJSON({
+                    responder({
                         tipo: 'error',
                         mensaje: 'No se pudo reconocer el audio.'
                     });
@@ -190,55 +456,62 @@ const registrarWebSocket = (servidor) => {
                     return;
                 }
 
-                enviarJSON({
+                responder({
                     tipo: 'transcripcion',
                     texto: textoUsuario
                 });
 
                 // 2. CLASIFICACIÓN DE INTENCIÓN
-                console.log('[INTENCION] Analizando texto reconocido...');
+                console.log(
+                    '[INTENCION] Analizando texto reconocido...'
+                );
 
                 const analisis = analizarIntencion(textoUsuario);
 
                 if (!vigente()) {
-                    console.log('[VOZ] Solicitud cancelada después del clasificador.');
                     return;
                 }
 
-                console.log('[INTENCION] Resultado completo:', JSON.stringify(analisis));
-                console.log('[INTENCION] Intención:', analisis.intencion);
-                console.log('[INTENCION] Datos:', JSON.stringify(analisis.datos || {}));
-                console.log('[INTENCION] Motivo:', analisis.motivo || 'ninguno');
+                console.log(
+                    '[INTENCION] Resultado:',
+                    JSON.stringify(analisis)
+                );
 
-                enviarJSON({
+                responder({
                     tipo: 'intencion',
                     intencion: analisis.intencion,
                     datos: analisis.datos
                 });
 
                 // 3. CONSULTA A PROLOG
-                console.log('[PROLOG] Consultando acción para:', analisis.intencion);
+                console.log(
+                    '[PROLOG] Consultando acción para:',
+                    analisis.intencion
+                );
 
                 const accion = await consultarProlog(
                     analisis.intencion
                 );
 
                 if (!vigente()) {
-                    console.log('[VOZ] Solicitud cancelada después de Prolog.');
                     return;
                 }
 
-                console.log('[PROLOG] Acción devuelta:', accion);
+                console.log(
+                    '[PROLOG] Acción devuelta:',
+                    accion
+                );
 
-                enviarJSON({
+                responder({
                     tipo: 'accion',
                     accion
                 });
 
-                // 4. EJECUCIÓN DE LA ACCIÓN Y ACCESO A POSTGRESQL
-                console.log('[ACCION] Ejecutando acción:', accion);
-                console.log('[ACCION] Usuario ID:', usuarioIdActual);
-                console.log('[ACCION] Datos recibidos:', JSON.stringify(analisis.datos || {}));
+                // 4. EJECUCIÓN DE ACCIÓN
+                console.log(
+                    '[ACCION] Ejecutando acción:',
+                    accion
+                );
 
                 const resultadoOperacion = await ejecutarAccionProlog({
                     accion,
@@ -248,17 +521,15 @@ const registrarWebSocket = (servidor) => {
                 });
 
                 if (!vigente()) {
-                    console.log('[VOZ] Solicitud cancelada después de ejecutar la acción.');
                     return;
                 }
 
-                console.log('[ACCION] Resultado completo:', JSON.stringify(resultadoOperacion));
-                console.log('[ACCION] Operación:', resultadoOperacion.resultado);
-                console.log('[ACCION] Correcta:', resultadoOperacion.ok);
-                console.log('[ACCION] Mensaje:', resultadoOperacion.mensaje);
-                console.log('[ACCION] Datos devueltos:', JSON.stringify(resultadoOperacion.datos || null));
+                console.log(
+                    '[ACCION] Resultado:',
+                    JSON.stringify(resultadoOperacion)
+                );
 
-                enviarJSON({
+                responder({
                     tipo: 'resultado_operacion',
                     resultado: resultadoOperacion.resultado,
                     ok: resultadoOperacion.ok,
@@ -266,23 +537,7 @@ const registrarWebSocket = (servidor) => {
                     mensaje: resultadoOperacion.mensaje
                 });
 
-                // 5. CONTEXTO BREVE PARA GEMMA
-
-                // LOGS NUEVOS: DATOS QUE SE UTILIZAN PARA GEMMA
-                console.log('\n========== DATOS PARA GEMMA ==========');
-
-                console.log('[GEMMA INPUT] Texto del usuario:', textoUsuario);
-
-                console.log('[GEMMA INPUT] Intención detectada:');
-                console.log(JSON.stringify(analisis, null, 2));
-
-                console.log('[GEMMA INPUT] Acción de Prolog:', accion);
-
-                console.log('[GEMMA INPUT] Resultado de la operación:');
-                console.log(JSON.stringify(resultadoOperacion, null, 2));
-
-                console.log('========== FIN DE DATOS PARA GEMMA ==========\n');
-
+                // 5. CONTEXTO PARA GEMMA
                 const contextoGemma = [
                     'Respondé en español rioplatense, de forma breve y natural.',
                     'No uses Markdown, saludos innecesarios ni repitas la pregunta.',
@@ -297,62 +552,60 @@ const registrarWebSocket = (servidor) => {
                         ok: resultadoOperacion.ok,
                         mensaje: resultadoOperacion.mensaje,
                         datos: resultadoOperacion.datos || [],
-                        requiereAclaracion: resultadoOperacion.resultado === 'requiere_aclaracion'
+                        requiereAclaracion:
+                            resultadoOperacion.resultado ===
+                            'requiere_aclaracion'
                     })}`
                 ].join('\n');
 
-                // LOGS NUEVOS: PROMPT EXACTO QUE SE ENVÍA A GEMMA
-                console.log('\n========== PROMPT ENVIADO A GEMMA ==========');
-                console.log(contextoGemma);
-                console.log('========== FIN DEL PROMPT ==========\n');
+                console.log(
+                    '[GEMMA] Iniciando generación de respuesta...'
+                );
 
-                console.log('[GEMMA] Preparando contexto breve.');
-                console.log('[GEMMA] Resultado de la operación recibido:', resultadoOperacion.resultado);
-                console.log('[GEMMA] Iniciando generación de respuesta...');
-
-                // 6. GENERACIÓN PROGRESIVA DE RESPUESTA Y SÍNTESIS CON PIPER
+                // 6. GEMMA + PIPER
                 let respuestaCompleta = '';
                 let cola = '';
 
                 const procesarParte = async (parte) => {
-                    if (!vigente()) return;
+                    if (!vigente()) {
+                        return;
+                    }
 
                     const texto = parte.trim();
 
-                    if (!texto) return;
+                    if (!texto) {
+                        return;
+                    }
 
-                    console.log('[PIPER] Sintetizando fragmento:', JSON.stringify(texto));
+                    console.log(
+                        '[PIPER] Sintetizando fragmento:',
+                        JSON.stringify(texto)
+                    );
 
                     const audio = await sintetizarConPiper(
                         texto,
                         signal
                     );
 
-                    if (!vigente()) return;
+                    if (!vigente()) {
+                        return;
+                    }
 
-                    console.log('[PIPER] Audio generado para el fragmento.');
-
-                    enviarJSON({
+                    responder({
                         tipo: 'respuesta',
                         texto
                     });
 
-                    if (!vigente()) return;
-
-                    ws.send(audio, { binary: true }, (error) => {
-                        if (error) {
-                            console.error('[PIPER] Error enviando audio:', error.message);
-                        } else {
-                            console.log('[PIPER] Audio enviado al cliente.');
-                        }
-                    });
+                    await enviarBinario(ws, audio);
                 };
 
                 const respuesta = await consultarGemma(
                     contextoGemma,
                     signal,
                     async (fragmento) => {
-                        if (!vigente()) return;
+                        if (!vigente()) {
+                            return;
+                        }
 
                         respuestaCompleta += fragmento;
                         cola += fragmento;
@@ -362,7 +615,9 @@ const registrarWebSocket = (servidor) => {
                                 /^([\s\S]*?[.!?]+)(?:\s+|$)/
                             );
 
-                            if (!coincidencia) break;
+                            if (!coincidencia) {
+                                break;
+                            }
 
                             const parte = coincidencia[1];
 
@@ -370,17 +625,16 @@ const registrarWebSocket = (servidor) => {
                                 coincidencia[0].length
                             );
 
-                            console.log('[GEMMA] Fragmento recibido.');
-
                             await procesarParte(parte);
 
-                            if (!vigente()) return;
+                            if (!vigente()) {
+                                return;
+                            }
                         }
                     }
                 );
 
                 if (!vigente()) {
-                    console.log('[VOZ] Solicitud cancelada durante Gemma o Piper.');
                     return;
                 }
 
@@ -388,7 +642,9 @@ const registrarWebSocket = (servidor) => {
                     await procesarParte(cola);
                 }
 
-                if (!vigente()) return;
+                if (!vigente()) {
+                    return;
+                }
 
                 const textoFinal = respuestaCompleta.trim() ||
                     (
@@ -397,12 +653,13 @@ const registrarWebSocket = (servidor) => {
                             : ''
                     );
 
-                console.log('[GEMMA] Respuesta final:', JSON.stringify(textoFinal));
+                console.log(
+                    '[GEMMA] Respuesta final:',
+                    JSON.stringify(textoFinal)
+                );
 
                 if (!textoFinal) {
-                    console.error('[GEMMA] No se recibió ninguna respuesta.');
-
-                    enviarJSON({
+                    responder({
                         tipo: 'error',
                         mensaje: 'Gemma no devolvió ninguna respuesta.'
                     });
@@ -410,12 +667,17 @@ const registrarWebSocket = (servidor) => {
                     return;
                 }
 
-                enviarJSON({
+                responder({
                     tipo: 'fin_respuesta'
                 });
 
-                console.log('[VOZ] Pipeline completado correctamente.');
-                console.log('========== FIN DEL PIPELINE ==========\n');
+                console.log(
+                    '[VOZ] Pipeline completado correctamente.'
+                );
+
+                console.log(
+                    '========== FIN DEL PIPELINE ==========\n'
+                );
             } catch (error) {
                 if (
                     signal.aborted ||
@@ -425,9 +687,12 @@ const registrarWebSocket = (servidor) => {
                     return;
                 }
 
-                console.error('[VOZ] Error en el pipeline:', error);
+                console.error(
+                    '[VOZ] Error en el pipeline:',
+                    error
+                );
 
-                enviarJSON({
+                responder({
                     tipo: 'error',
                     mensaje: 'Ocurrió un error al procesar la consulta de voz.'
                 });
@@ -438,6 +703,9 @@ const registrarWebSocket = (servidor) => {
             }
         };
 
+        /*
+         * MENSAJES DEL NAVEGADOR
+         */
         ws.on('message', (datos, esBinario) => {
             if (!esBinario) {
                 let mensaje;
@@ -445,9 +713,12 @@ const registrarWebSocket = (servidor) => {
                 try {
                     mensaje = JSON.parse(datos.toString());
                 } catch (error) {
-                    console.error('[WS] Error interpretando JSON:', error.message);
+                    console.error(
+                        '[WS] Error interpretando JSON:',
+                        error.message
+                    );
 
-                    enviarJSON({
+                    responder({
                         tipo: 'error',
                         mensaje: 'El mensaje recibido no es JSON válido.'
                     });
@@ -455,22 +726,41 @@ const registrarWebSocket = (servidor) => {
                     return;
                 }
 
-                console.log('[WS] Mensaje recibido:', mensaje.type);
+                if (
+                    !mensaje ||
+                    typeof mensaje !== 'object' ||
+                    Array.isArray(mensaje)
+                ) {
+                    responder({
+                        tipo: 'error',
+                        mensaje: 'El mensaje recibido no es válido.'
+                    });
 
+                    return;
+                }
+
+                console.log(
+                    '[WS] Mensaje recibido:',
+                    mensaje.type
+                );
+
+                // REGISTRAR RECORDATORIOS
+                if (mensaje.type === 'registrar_recordatorios') {
+                    registrarRecordatorios(mensaje);
+                    return;
+                }
+
+                // INICIAR ASISTENTE
                 if (mensaje.type === 'iniciar_asistente') {
                     const id = Number(mensaje.usuarioId);
-                    const nombre = typeof mensaje.nombre === 'string'
-                        ? mensaje.nombre.trim().slice(0, 80)
-                        : '';
 
-                    if (
-                        !Number.isSafeInteger(id) ||
-                        id <= 0 ||
-                        !nombre
-                    ) {
-                        console.error('[WS] Perfil recibido inválido.');
+                    const nombre =
+                        typeof mensaje.nombre === 'string'
+                            ? mensaje.nombre.trim().slice(0, 80)
+                            : '';
 
-                        enviarJSON({
+                    if (!usuarioValido(id) || !nombre) {
+                        responder({
                             tipo: 'error',
                             mensaje: 'El perfil recibido no es válido. Volvé a seleccionar tu perfil.'
                         });
@@ -478,36 +768,66 @@ const registrarWebSocket = (servidor) => {
                         return;
                     }
 
-                    usuarioIdActual = id;
-                    nombreUsuarioActual = nombre;
+                    seleccionarUsuario(id, nombre);
 
-                    console.log('[WS] Perfil seleccionado:', {
-                        usuarioId: usuarioIdActual,
-                        nombre: nombreUsuarioActual
-                    });
+                    modoConexion = 'asistente';
+                    ws.modoConexion = 'asistente';
+
+                    // El asistente también puede recibir
+                    // recordatorios automáticos.
+                    ws.avisosVozActivos = true;
+
+                    console.log(
+                        '[WS] Perfil seleccionado:',
+                        {
+                            usuarioId: usuarioIdActual,
+                            nombre: nombreUsuarioActual
+                        }
+                    );
 
                     procesarSaludo();
                     return;
                 }
 
+                // CANCELAR CONSULTA
                 if (mensaje.type === 'cancelar') {
-                    console.log('[WS] Cancelación solicitada por el usuario.');
+                    console.log(
+                        '[WS] Cancelación solicitada.'
+                    );
 
                     requestId++;
                     cancelarActual();
 
-                    enviarJSON({
+                    responder({
                         tipo: 'cancelado'
                     });
 
                     return;
                 }
 
-                console.warn('[WS] Tipo de mensaje no compatible:', mensaje.type);
+                console.warn(
+                    '[WS] Tipo de mensaje no compatible:',
+                    mensaje.type
+                );
 
-                enviarJSON({
+                responder({
                     tipo: 'error',
                     mensaje: 'El tipo de mensaje recibido no es compatible.'
+                });
+
+                return;
+            }
+
+            /*
+             * AUDIO DEL MICRÓFONO
+             *
+             * Solo se acepta desde una conexión
+             * que haya iniciado el asistente.
+             */
+            if (modoConexion !== 'asistente') {
+                responder({
+                    tipo: 'error',
+                    mensaje: 'Primero tenés que iniciar el asistente.'
                 });
 
                 return;
@@ -516,9 +836,7 @@ const registrarWebSocket = (servidor) => {
             const audioBuffer = Buffer.from(datos);
 
             if (audioBuffer.length === 0) {
-                console.warn('[WS] Se recibió un audio vacío.');
-
-                enviarJSON({
+                responder({
                     tipo: 'error',
                     mensaje: 'El audio recibido está vacío.'
                 });
@@ -527,9 +845,7 @@ const registrarWebSocket = (servidor) => {
             }
 
             if (!usuarioIdActual) {
-                console.error('[WS] Se recibió audio sin perfil seleccionado.');
-
-                enviarJSON({
+                responder({
                     tipo: 'error',
                     mensaje: 'Primero tenés que iniciar el asistente con tu perfil.'
                 });
@@ -545,24 +861,48 @@ const registrarWebSocket = (servidor) => {
 
             const id = requestId;
 
-            console.log(`[WS] Audio recibido: ${audioBuffer.length} bytes.`);
-            console.log(`[WS] Iniciando procesamiento de solicitud ${id}.`);
+            console.log(
+                `[WS] Audio recibido: ${audioBuffer.length} bytes.`
+            );
 
-            procesarAudio(audioBuffer, id, controller);
+            console.log(
+                `[WS] Iniciando procesamiento de solicitud ${id}.`
+            );
+
+            procesarAudio(
+                audioBuffer,
+                id,
+                controller
+            );
         });
+
+        /*
+         * LIMPIEZA DE CONEXIONES
+         */
+        const limpiarConexion = () => {
+            quitarConexionUsuario(usuarioIdActual, ws);
+
+            usuarioIdActual = null;
+            ws.avisosVozActivos = false;
+            ws.modoConexion = null;
+
+            requestId++;
+            cancelarActual();
+        };
 
         ws.on('close', () => {
             console.log('[WS] Cliente desconectado.');
 
-            requestId++;
-            cancelarActual();
+            limpiarConexion();
         });
 
         ws.on('error', (error) => {
-            console.error('[WS] Error del WebSocket:', error.message);
+            console.error(
+                '[WS] Error del WebSocket:',
+                error.message
+            );
 
-            requestId++;
-            cancelarActual();
+            limpiarConexion();
         });
     });
 

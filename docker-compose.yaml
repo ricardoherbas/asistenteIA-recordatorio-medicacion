@@ -1,3 +1,4 @@
+
 services:
   frontend:
     build:
@@ -133,6 +134,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
 
 volumes:
   postgres_data:

@@ -1,7 +1,7 @@
-
 const {
     procesarEmailsPendientes,
-    procesarPushPendientes
+    procesarPushPendientes,
+    procesarVozPendientes
 } = require('../services/envios.service');
 
 const INTERVALO_REVISION_MS = 30 * 1000;
@@ -16,6 +16,7 @@ async function ejecutarEnvios() {
     try {
         await procesarEmailsPendientes();
         await procesarPushPendientes();
+        await procesarVozPendientes();
     } catch (error) {
         console.error('Error al procesar envíos:', error.message);
     } finally {
