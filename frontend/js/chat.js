@@ -61,6 +61,39 @@
     let recordatorioEnRecepcion = false;
     let recordatoriosPendientes = 0;
 
+    // Control de confirmaciones de tomas.
+    const tomasPendientesConfirmacion = [];
+    let confirmacionEnCurso = false;
+
+    function actualizarBotonConfirmacion() {
+        elementos.botonConfirmarToma.disabled =
+            confirmacionEnCurso ||
+            tomasPendientesConfirmacion.length === 0;
+
+        elementos.botonConfirmarToma.textContent = confirmacionEnCurso
+            ? 'Confirmando toma...'
+            : '✓ Confirmar que tomé la medicación';
+    }
+
+    function registrarTomaPendiente(registroTomaId) {
+        const id = Number(registroTomaId);
+
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            console.warn(
+                '[MEMORIC] Recordatorio sin identificador de toma válido:',
+                registroTomaId
+            );
+
+            return;
+        }
+
+        if (!tomasPendientesConfirmacion.includes(id)) {
+            tomasPendientesConfirmacion.push(id);
+        }
+
+        actualizarBotonConfirmacion();
+    }
+
     function mostrarError(mensaje) {
         elementos.mensajeError.textContent = mensaje;
         elementos.mensajeError.hidden = false;
@@ -152,6 +185,89 @@
         } catch (error) {
             console.error('No se pudo recuperar el perfil:', error);
             return null;
+        }
+    }
+
+    /* =========================================
+       Confirmación de tomas de medicación
+    ========================================= */
+
+    async function confirmarToma() {
+        if (
+            confirmacionEnCurso ||
+            tomasPendientesConfirmacion.length === 0
+        ) {
+            return;
+        }
+
+        const persona = recuperarPersona();
+
+        if (!persona) {
+            mostrarError(
+                'No se encontró un perfil válido para confirmar la toma.'
+            );
+
+            return;
+        }
+
+        const registroTomaId = tomasPendientesConfirmacion[0];
+
+        confirmacionEnCurso = true;
+        actualizarBotonConfirmacion();
+        ocultarError();
+
+        try {
+            const apiBase = String(
+                window.APP_CONFIG.API_URL || ''
+            ).replace(/\/$/, '');
+
+            const respuesta = await fetch(
+                `${apiBase}/api/tomas/${registroTomaId}/confirmar`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        usuarioId: persona.usuarioId,
+                        origen: 'web'
+                    })
+                }
+            );
+
+            const resultado = await respuesta.json();
+
+            if (!respuesta.ok || !resultado.ok) {
+                throw new Error(
+                    resultado.mensaje ||
+                    'No se pudo confirmar la toma.'
+                );
+            }
+
+            tomasPendientesConfirmacion.shift();
+
+            agregarMensaje(
+                'asistente',
+                'Tu toma de medicación fue confirmada correctamente.'
+            );
+
+            console.log(
+                '[MEMORIC] Toma confirmada:',
+                registroTomaId
+            );
+        } catch (error) {
+            console.error(
+                '[MEMORIC] Error confirmando toma:',
+                error
+            );
+
+            mostrarError(
+                error.message ||
+                'No se pudo registrar la confirmación.'
+            );
+        } finally {
+            confirmacionEnCurso = false;
+            actualizarBotonConfirmacion();
         }
     }
 
@@ -308,6 +424,8 @@
             recordatoriosPendientes++;
 
             reiniciarSegmentoVoz();
+
+            registrarTomaPendiente(mensaje.registroTomaId);
 
             agregarMensaje(
                 'asistente',
@@ -1008,7 +1126,7 @@
     }
 
     /* =========================================
-       Acciones todavía no implementadas
+       Mensajes escritos
     ========================================= */
 
     function enviarMensajeTexto() {
@@ -1020,6 +1138,10 @@
             'El envío de mensajes escritos todavía no está implementado en el WebSocket del backend.'
         );
     }
+
+    /* =========================================
+       Eventos de la interfaz
+    ========================================= */
 
     elementos.botonEscucha.addEventListener(
         'click',
@@ -1036,11 +1158,7 @@
 
     elementos.botonConfirmarToma.addEventListener(
         'click',
-        () => {
-            mostrarError(
-                'La confirmación de una toma todavía no está conectada a un registro persistente.'
-            );
-        }
+        confirmarToma
     );
 
     window.addEventListener('beforeunload', () => {
@@ -1067,6 +1185,7 @@
     });
 
     actualizarEstadoMicrofono(false);
+    actualizarBotonConfirmacion();
     ocultarError();
     ocultarActividad();
     conectarWebSocket();

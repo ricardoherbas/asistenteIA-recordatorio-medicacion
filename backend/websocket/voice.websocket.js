@@ -5,6 +5,7 @@ const { analizarIntencion } = require('../services/intencion.service');
 const { consultarProlog } = require('../services/prolog.service');
 const { ejecutarAccionProlog } = require('../services/accionesProlog.service');
 const { consultarGemma } = require('../services/gemma.service');
+const { prepararContextoGemma } = require('../services/contextoGemma.service');
 const { sintetizarConPiper } = require('../services/piper.service');
 
 const registrarWebSocket = (servidor) => {
@@ -82,9 +83,15 @@ const registrarWebSocket = (servidor) => {
      * Para este prototipo se utiliza el usuarioId
      * proporcionado por el frontend.
      */
-    const enviarRecordatorioVoz = async (usuarioId, mensaje, envioId) => {
+    const enviarRecordatorioVoz = async (
+        usuarioId,
+        mensaje,
+        envioId,
+        registroTomaId
+    ) => {
         const id = Number(usuarioId);
         const identificadorEnvio = Number(envioId);
+        const identificadorToma = Number(registroTomaId);
 
         if (!usuarioValido(id)) {
             throw new Error('El usuario del recordatorio no es válido.');
@@ -99,6 +106,13 @@ const registrarWebSocket = (servidor) => {
             identificadorEnvio <= 0
         ) {
             throw new Error('El identificador del envío no es válido.');
+        }
+
+        if (
+            !Number.isSafeInteger(identificadorToma) ||
+            identificadorToma <= 0
+        ) {
+            throw new Error('El identificador de la toma no es válido.');
         }
 
         const conexiones = conexionesUsuarios.get(id);
@@ -169,6 +183,7 @@ const registrarWebSocket = (servidor) => {
             enviarJSON(ws, {
                 tipo: 'recordatorio_voz',
                 envioId: identificadorEnvio,
+                registroTomaId: identificadorToma,
                 texto: mensaje.trim()
             });
 
@@ -388,7 +403,7 @@ const registrarWebSocket = (servidor) => {
          * PIPELINE DE VOZ
          *
          * Whisper -> Intención -> Prolog ->
-         * Acción -> Gemma -> Piper
+         * Acción -> Contexto -> Gemma -> Piper
          */
         const procesarAudio = async (
             audioBuffer,
@@ -538,25 +553,18 @@ const registrarWebSocket = (servidor) => {
                 });
 
                 // 5. CONTEXTO PARA GEMMA
-                const contextoGemma = [
-                    'Respondé en español rioplatense, de forma breve y natural.',
-                    'No uses Markdown, saludos innecesarios ni repitas la pregunta.',
-                    'Respondé únicamente con el resultado de la operación proporcionado abajo.',
-                    'Usá el mensaje como base y los datos para contestar la consulta.',
-                    'No inventes datos, dosis, medicamentos ni horarios.',
-                    'No agregues recomendaciones ni menciones nombres internos del sistema.',
-                    'Si se requiere una aclaración, formulá únicamente la pregunta indicada.',
-                    '',
-                    `Consulta del usuario: ${textoUsuario}`,
-                    `Resultado de la operación: ${JSON.stringify({
-                        ok: resultadoOperacion.ok,
-                        mensaje: resultadoOperacion.mensaje,
-                        datos: resultadoOperacion.datos || [],
-                        requiereAclaracion:
-                            resultadoOperacion.resultado ===
-                            'requiere_aclaracion'
-                    })}`
-                ].join('\n');
+                // Convierte los datos de la operación en texto
+                // antes de enviarlos al modelo.
+                const contextoGemma = prepararContextoGemma(
+                    textoUsuario,
+                    accion,
+                    resultadoOperacion
+                );
+
+                console.log(
+                    '[GEMMA] Contexto preparado:',
+                    contextoGemma
+                );
 
                 console.log(
                     '[GEMMA] Iniciando generación de respuesta...'

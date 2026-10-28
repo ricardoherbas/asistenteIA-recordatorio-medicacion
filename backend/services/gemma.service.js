@@ -1,3 +1,4 @@
+
 const axios = require('axios');
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST;
@@ -32,7 +33,11 @@ const consultarGemma = async (prompt, signal, onFragment) => {
                 model: GEMMA_MODEL,
                 prompt,
                 stream: true,
-                keep_alive: -1
+                keep_alive: -1,
+                options: {
+                    temperature: 0.2,
+                    num_predict: 120
+                }
             },
             {
                 responseType: 'stream',

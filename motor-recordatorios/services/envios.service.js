@@ -161,6 +161,7 @@ async function obtenerVozPendientes() {
             e.id,
             e.alerta_id,
             a.usuario_id,
+            a.registro_toma_id,
             a.mensaje
         FROM envios_alertas e
         INNER JOIN alertas a ON a.id = e.alerta_id
@@ -181,6 +182,9 @@ async function obtenerVozPendientes() {
  *
  * El backend utiliza Piper para generar el audio
  * y WebSocket para enviarlo al navegador.
+ *
+ * Se incluye registroTomaId para permitir que
+ * el usuario confirme la toma correspondiente.
  */
 async function enviarRecordatorioVoz(envio) {
     if (!BACKEND_INTERNAL_URL || !MOTOR_INTERNAL_TOKEN) {
@@ -200,7 +204,8 @@ async function enviarRecordatorioVoz(envio) {
         body: JSON.stringify({
             usuarioId: envio.usuario_id,
             mensaje: envio.mensaje,
-            envioId: envio.id
+            envioId: envio.id,
+            registroTomaId: envio.registro_toma_id
         }),
         signal: AbortSignal.timeout(60000)
     });

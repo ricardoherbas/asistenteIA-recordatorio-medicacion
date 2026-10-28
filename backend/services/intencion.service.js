@@ -1,70 +1,61 @@
 
 const INTENCIONES = {
-    confirmar_toma: [
-        'ya la tome',
-        'ya lo tome',
-        'me la tome',
-        'me lo tome',
-        'ya tome la medicacion',
-        'ya tome el medicamento',
-        'ya tome mi medicamento',
-        'dosis tomada',
-        'la tome'
-    ],
-    no_tome: [
-        'no la tome',
-        'no lo tome',
-        'todavia no la tome',
-        'aun no la tome',
-        'no tome la medicacion',
-        'no tome el medicamento',
-        'me olvide de tomarla',
-        'me olvide de tomarlo',
-        'todavia no'
-    ],
-    consultar_medicamentos: [
-        'que medicamentos tengo',
-        'que medicacion tengo',
-        'que medicamentos tengo registrados',
-        'que medicacion tengo registrada',
-        'que medicamentos tengo guardados',
-        'que medicamento tengo registrado',
-        'que medicamento estoy tomando',
-        'que medicacion estoy tomando',
-        'que dosis tengo',
-        'que dosis tengo registrada',
-        'cual es mi dosis',
-        'cual es la dosis',
-        'dosis registrada',
-        'dosis del medicamento',
-        'dosis de mi medicamento',
-        'que instrucciones tiene',
-        'cuales son las instrucciones',
-        'como tengo que tomar el medicamento',
-        'como debo tomar el medicamento',
-        'mostrame mis medicamentos',
-        'mostrar mis medicamentos',
-        'listar medicamentos',
-        'lista de medicamentos',
-        'medicamentos registrados',
-        'medicacion registrada'
-    ],
-    consultar_horario: [
-        'a que hora',
-        'cuando me toca',
-        'cuando tengo que tomar',
-        'cual es mi horario',
-        'que medicamento me toca',
-        'que me toca tomar',
-        'proximo recordatorio'
-    ],
     rechazar_recordatorio: [
-        'no quiero tomarla',
-        'no quiero tomarlo',
-        'no voy a tomarla',
-        'no voy a tomarlo',
-        'rechazo la medicacion',
-        'no quiero tomar el medicamento'
+        /\bno\s+(?:quiero|voy\s+a|pienso|deseo)\s+tomar\b/,
+        /\bno\s+(?:la|lo|las|los)\s+(?:quiero|voy\s+a)\s+tomar\b/,
+        /\bno\s+me\s+(?:la|lo|las|los)\s+(?:quiero|voy\s+a)\s+tomar\b/,
+        /\brechaz(?:o|ar)\b/,
+        /\bme\s+niego\s+a\s+tomar\b/
+    ],
+
+    no_tome: [
+        /\bno\s+(?:me\s+)?(?:la\s+|lo\s+|las\s+|los\s+)?tome\b/,
+        /\btodavia\s+no\b/,
+        /\baun\s+no\b/,
+        /\bme\s+olvide\s+de\s+tomar\b/,
+        /\bse\s+me\s+olvido\b/,
+        /\bno\s+he\s+tomado\b/,
+        /\bno\s+la\s+he\s+tomado\b/,
+        /\bno\s+lo\s+he\s+tomado\b/
+    ],
+
+    consultar_horario: [
+        /\ba\s+que\s+hora\b/,
+        /\bcuando\b/,
+        /\bhorarios?\b/,
+        /\bproxim[oa]\s+(?:toma|dosis|recordatorio)\b/,
+        /\bque\s+(?:medicamento|medicacion|pastilla)\s+me\s+toca\b/,
+        /\bque\s+me\s+toca\s+tomar\b/,
+        /\bme\s+toca\s+tomar\b/,
+        /\ba\s+que\s+hora\s+debo\s+tomar\b/
+    ],
+
+    consultar_medicamentos: [
+        /\bque\s+medicamentos?\b/,
+        /\bque\s+medicacion\b/,
+        /\bmis\s+medicamentos\b/,
+        /\bmedicamentos?\s+registrados?\b/,
+        /\bmedicacion\s+registrada\b/,
+        /\bmedicamentos?\s+guardados?\b/,
+        /\b(?:lista|listado)\s+de\s+medicamentos\b/,
+        /\b(?:listar|mostrar|mostrame|decime)\s+(?:mis\s+)?medicamentos\b/,
+        /\b(?:que|cual|cuanto)\s+(?:es\s+)?(?:mi\s+|la\s+)?dosis\b/,
+        /\bdosis\s+(?:registrada|del\s+medicamento|de\s+mi\s+medicamento)\b/,
+        /\binstrucciones\b/,
+        /\bcomo\s+(?:tengo|debo|hay\s+que)\s+tomar\b/,
+        /\bque\s+estoy\s+tomando\b/,
+        /\bque\s+(?:medicamento|medicacion)\s+estoy\s+tomando\b/
+    ],
+
+    confirmar_toma: [
+        /\bya\s+(?:me\s+)?(?:la\s+|lo\s+|las\s+|los\s+)?tome\b/,
+        /\bme\s+(?:la\s+|lo\s+|las\s+|los\s+)?tome\b/,
+        /\b(?:la|lo|las|los)\s+tome\b/,
+        /\bya\s+(?:me\s+)?(?:la\s+|lo\s+)?he\s+tomado\b/,
+        /\b(?:dosis|medicacion|pastilla)\s+tomada\b/,
+        /\bmedicamento\s+tomado\b/,
+        /\bya\s+esta\s+tomada\b/,
+        /\bya\s+esta\s+tomado\b/
     ]
 };
 
@@ -78,10 +69,8 @@ const normalizarTexto = (texto) => {
         .trim();
 };
 
-const contieneFrase = (texto, frases) => {
-    return frases.some((frase) => {
-        return ` ${texto} `.includes(` ${frase} `);
-    });
+const coincidePatron = (texto, patrones) => {
+    return patrones.some((patron) => patron.test(texto));
 };
 
 const extraerDatos = (textoOriginal) => {
@@ -91,23 +80,50 @@ const extraerDatos = (textoOriginal) => {
         /\b(?:a las|a la|para las|para la)\s+(\d{1,2})(?::(\d{2}))?\b/
     );
 
-    const datos = {
-        horario: horaEncontrada
-            ? {
-                hora: Number(horaEncontrada[1]),
-                minutos: Number(horaEncontrada[2] || 0)
-            }
-            : null
-    };
+    let horario = null;
 
-    return datos;
+    if (horaEncontrada) {
+        const hora = Number(horaEncontrada[1]);
+        const minutos = Number(horaEncontrada[2] || 0);
+
+        if (
+            hora >= 0 &&
+            hora <= 23 &&
+            minutos >= 0 &&
+            minutos <= 59
+        ) {
+            horario = {
+                hora,
+                minutos
+            };
+        }
+    }
+
+    return {
+        horario
+    };
+};
+
+const esPregunta = (textoOriginal, textoNormalizado) => {
+    const texto = textoNormalizado;
+
+    if (textoOriginal.includes('¿') || textoOriginal.includes('?')) {
+        return true;
+    }
+
+    return /^(?:que|cual|cuales|cuando|como|cuanto|cuantos|donde|por que)\b/.test(
+        texto
+    );
 };
 
 const analizarIntencion = (textoOriginal) => {
     console.log('\n========== CLASIFICADOR DE INTENCIÓN ==========');
     console.log('[INTENCION] Texto original:', textoOriginal);
 
-    if (typeof textoOriginal !== 'string' || !textoOriginal.trim()) {
+    if (
+        typeof textoOriginal !== 'string' ||
+        !textoOriginal.trim()
+    ) {
         const resultado = {
             intencion: 'respuesta_ambigua',
             datos: {},
@@ -128,37 +144,60 @@ const analizarIntencion = (textoOriginal) => {
 
     let resultado;
 
-    if (contieneFrase(texto, INTENCIONES.consultar_medicamentos)) {
-        resultado = {
-            intencion: 'consultar_medicamentos',
-            datos
-        };
-    } else if (contieneFrase(texto, INTENCIONES.consultar_horario)) {
+    const pregunta = esPregunta(textoOriginal, texto);
+
+    // Consultas explícitas sobre horarios.
+    if (coincidePatron(texto, INTENCIONES.consultar_horario)) {
         resultado = {
             intencion: 'consultar_horario',
             datos
         };
-    } else if (contieneFrase(texto, INTENCIONES.no_tome)) {
+
+    // Consultas explícitas sobre medicamentos y dosis.
+    } else if (coincidePatron(texto, INTENCIONES.consultar_medicamentos)) {
         resultado = {
-            intencion: 'no_tome',
+            intencion: 'consultar_medicamentos',
             datos
         };
-    } else if (contieneFrase(texto, INTENCIONES.rechazar_recordatorio)) {
+
+    // Una pregunta no debe modificar el estado de una toma.
+    } else if (pregunta) {
+        resultado = {
+            intencion: 'respuesta_ambigua',
+            datos,
+            motivo: 'pregunta_no_reconocida'
+        };
+
+    // Rechazo explícito de la medicación.
+    } else if (coincidePatron(texto, INTENCIONES.rechazar_recordatorio)) {
         resultado = {
             intencion: 'rechazar_recordatorio',
             datos
         };
-    } else if (contieneFrase(texto, INTENCIONES.confirmar_toma)) {
+
+    // El usuario informa que todavía no tomó la medicación.
+    } else if (coincidePatron(texto, INTENCIONES.no_tome)) {
+        resultado = {
+            intencion: 'no_tome',
+            datos
+        };
+
+    // El usuario informa que ya tomó la medicación.
+    } else if (coincidePatron(texto, INTENCIONES.confirmar_toma)) {
         resultado = {
             intencion: 'confirmar_toma',
             datos
         };
+
+    // Respuestas que necesitan contexto de una conversación anterior.
     } else if (/^(si|no|puede ser|no se|quizas|tal vez)$/.test(texto)) {
         resultado = {
             intencion: 'respuesta_ambigua',
             datos,
             motivo: 'requiere_contexto'
         };
+
+    // No se encontró ninguna intención suficientemente clara.
     } else {
         resultado = {
             intencion: 'respuesta_ambigua',
